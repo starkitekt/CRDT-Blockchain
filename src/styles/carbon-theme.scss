@@ -1,0 +1,10 @@
+@use '@carbon/react';
+
+:root {
+  --cds-body-font-family: var(--font-plex-sans), 'Helvetica Neue', Arial, sans-serif;
+}
+
+body {
+  background-color: #f4f4f4;
+  color: #161616;
+}

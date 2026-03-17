@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#f59e0b"/>
+  <!-- Honeycomb hexagons -->
+  <g fill="none" stroke="#ffffff" stroke-width="14" opacity="0.9">
+    <!-- Centre hex -->
+    <polygon points="256,140 302,166 302,218 256,244 210,218 210,166"/>
+    <!-- Top-left -->
+    <polygon points="164,88 210,114 210,166 164,192 118,166 118,114"/>
+    <!-- Top-right -->
+    <polygon points="348,88 394,114 394,166 348,192 302,166 302,114"/>
+    <!-- Bottom-left -->
+    <polygon points="164,244 210,270 210,322 164,348 118,322 118,270"/>
+    <!-- Bottom-right -->
+    <polygon points="348,244 394,270 394,322 348,348 302,322 302,270"/>
+    <!-- Bottom-centre -->
+    <polygon points="256,296 302,322 302,374 256,400 210,374 210,322"/>
+  </g>
+  <!-- Chain link overlay -->
+  <circle cx="256" cy="192" r="24" fill="#ffffff" opacity="0.95"/>
+  <path d="M232 192 h-32 a20 20 0 0 1 0-40 h32" stroke="#f59e0b" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <path d="M280 192 h32 a20 20 0 0 0 0-40 h-32" stroke="#f59e0b" stroke-width="10" fill="none" stroke-linecap="round"/>
+</svg>

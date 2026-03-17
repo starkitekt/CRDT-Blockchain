@@ -1,0 +1,25 @@
+# Check node_modules
+node_modules/
+.next/
+out/
+build/
+
+# IDE files
+.vscode/
+.idea/
+
+# Environment files
+.env*
+!.env.example
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+
+# OS files
+.DS_Store
+Thumbs.db

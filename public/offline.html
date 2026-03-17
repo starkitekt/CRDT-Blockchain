@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HoneyTRACE — Offline</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #fffbeb; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 2rem; text-align: center; }
+    .card { background: white; border-radius: 1.5rem; padding: 3rem; max-width: 480px; box-shadow: 0 20px 60px rgba(0,0,0,.08); }
+    .icon { font-size: 4rem; margin-bottom: 1.5rem; }
+    h1 { color: #92400e; font-size: 1.75rem; margin-bottom: .75rem; }
+    p { color: #78716c; line-height: 1.7; margin-bottom: 1.5rem; }
+    .badge { background: #fef3c7; color: #92400e; border-radius: 999px; padding: .25rem 1rem; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; display: inline-block; }
+    button { margin-top: 1.5rem; background: #f59e0b; color: white; border: none; border-radius: .75rem; padding: .75rem 2rem; font-size: 1rem; font-weight: 700; cursor: pointer; }
+    button:hover { background: #d97706; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">🍯</div>
+    <span class="badge">HoneyTRACE</span>
+    <h1 style="margin-top:1rem">You're offline</h1>
+    <p>No internet connection detected. Your harvest entries are saved locally and will be automatically synced to the blockchain ledger when connectivity is restored.</p>
+    <p style="font-size:.85rem; color:#a8a29e;">Data integrity is maintained — nothing is lost.</p>
+    <button onclick="window.location.reload()">Try Again</button>
+  </div>
+</body>
+</html>

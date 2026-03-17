@@ -32,6 +32,13 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# build logs
+*.log
+*.txt
+build_error*.log
+build_success*.log
 
 # vercel
 .vercel
