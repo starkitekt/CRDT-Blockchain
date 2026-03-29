@@ -1,41 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { LoginSchema } from '@/lib/validation/auth.schema';
+import { loginUser } from '@/lib/services/auth.service';
 
-const VALID_ROLES = ['farmer', 'warehouse', 'lab', 'officer', 'enterprise', 'consumer', 'secretary', 'admin'];
+const COOKIE_MAX_AGE = 60 * 60 * 8; // 8 hours
 
-/**
- * POST /api/auth — minimal credential check and role cookie issuance.
- *
- * Body: { email: string; password: string; role: string }
- *
- * In production: validate against a real user store + hash comparison.
- * For now, accepts any non-empty credentials and sets the role cookie.
- */
 export async function POST(req: NextRequest) {
   try {
-    const { email, role } = await req.json() as { email: string; password: string; role: string };
+    const body = await req.json();
 
-    if (!email || !VALID_ROLES.includes(role)) {
-      return NextResponse.json({ error: 'Invalid credentials or role' }, { status: 401 });
+    const parsed = LoginSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
 
-    const response = NextResponse.json({ success: true, role });
-    response.cookies.set('honeytrace_role', role, {
-      httpOnly: true,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 8, // 8 hours
-      secure: process.env.NODE_ENV === 'production',
-    });
+    const { email, password, role } = parsed.data;
+    const { role: confirmedRole, token } = await loginUser(email, password, role);
 
+    const cookieOpts = {
+      httpOnly: true,
+      sameSite: 'lax' as const,
+      path: '/',
+      maxAge: COOKIE_MAX_AGE,
+      secure: process.env.NODE_ENV === 'production',
+    };
+
+    const response = NextResponse.json({ success: true, role: confirmedRole });
+    // Preserve original honeytrace_role cookie — required by src/middleware.ts
+    response.cookies.set('honeytrace_role', confirmedRole, cookieOpts);
+    // New JWT cookie — used by API-level RBAC
+    response.cookies.set('honeytrace_token', token, cookieOpts);
     return response;
-  } catch {
+
+  } catch (err: any) {
+    if (['INVALID_CREDENTIALS', 'ROLE_MISMATCH', 'INVALID_ROLE'].includes(err.message)) {
+      return NextResponse.json({ error: 'Invalid credentials or role' }, { status: 401 });
+    }
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }
 }
 
-/** DELETE /api/auth — logout (clear cookie) */
 export async function DELETE() {
   const response = NextResponse.json({ success: true });
+  // Preserve original delete pattern
   response.cookies.delete('honeytrace_role');
+  response.cookies.delete('honeytrace_token');
   return response;
 }

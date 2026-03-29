@@ -7,11 +7,6 @@ const withNextIntl = createNextIntlPlugin();
 const securityHeaders = [
   {
     key: 'Content-Security-Policy',
-    // Notes on relaxations vs original:
-    //  img-src   — added *.tile.openstreetmap.org for Leaflet map tiles
-    //              added unpkg.com for Leaflet default marker PNGs
-    //  connect-src — added *.tile.openstreetmap.org for tile XHR/fetch
-    //  worker-src  — added 'self' blob: to allow service worker registration
     value: [
       "default-src 'self'",
       "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
@@ -26,39 +21,43 @@ const securityHeaders = [
   },
   {
     key: 'X-DNS-Prefetch-Control',
-    value: 'on'
+    value: 'on',
   },
   {
     key: 'Strict-Transport-Security',
-    value: 'max-age=63072000; includeSubDomains; preload'
+    value: 'max-age=63072000; includeSubDomains; preload',
   },
   {
     key: 'X-XSS-Protection',
-    value: '1; mode=block'
+    value: '1; mode=block',
   },
   {
     key: 'X-Frame-Options',
-    value: 'DENY'
+    value: 'DENY',
   },
   {
     key: 'X-Content-Type-Options',
-    value: 'nosniff'
+    value: 'nosniff',
   },
   {
     key: 'Referrer-Policy',
-    value: 'strict-origin-when-cross-origin'
+    value: 'strict-origin-when-cross-origin',
   },
   {
     // geolocation=(self) — allows farmer GPS via navigator.geolocation
     // camera/microphone remain blocked
     // interest-cohort — disables FLoC tracking
     key: 'Permissions-Policy',
-    value: 'camera=(), microphone=(), geolocation=(self), interest-cohort=()'
-  }
+    value: 'camera=(), microphone=(), geolocation=(self), interest-cohort=()',
+  },
 ];
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+
+  // Required: prevents Next.js 16 from bundling mongoose (causes build failures)
+  serverExternalPackages: ['mongoose'],
+
   async headers() {
     return [
       {
@@ -67,11 +66,14 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+
   sassOptions: {
     includePaths: [path.join(process.cwd(), 'node_modules')],
   },
+
   poweredByHeader: false,
   compress: true,
+
   webpack(config) {
     return config;
   },
