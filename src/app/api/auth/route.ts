@@ -1,10 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LoginSchema } from '@/lib/validation/auth.schema';
 import { loginUser } from '@/lib/services/auth.service';
+import { checkRateLimit, resetRateLimit } from '@/lib/rateLimit';
+
 
 const COOKIE_MAX_AGE = 60 * 60 * 8; // 8 hours
 
+
 export async function POST(req: NextRequest) {
+  // ── Rate limit gate ─────────────────────────────────────────────────────
+  const ip =
+    req.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
+    req.headers.get('x-real-ip') ??
+    '127.0.0.1';
+
+  const { allowed, retryAfterSeconds } = checkRateLimit(ip);
+  if (!allowed) {
+    return NextResponse.json(
+      { error: `Too many login attempts. Try again in ${Math.ceil(retryAfterSeconds / 60)} minute(s).` },
+      { status: 429, headers: { 'Retry-After': String(retryAfterSeconds) } }
+    );
+  }
+
   try {
     const body = await req.json();
 
@@ -24,10 +41,11 @@ export async function POST(req: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
     };
 
+    // ── Success — reset rate limit counter for this IP ────────────────────
+    resetRateLimit(ip);
+
     const response = NextResponse.json({ success: true, role: confirmedRole });
-    // Preserve original honeytrace_role cookie — required by src/middleware.ts
     response.cookies.set('honeytrace_role', confirmedRole, cookieOpts);
-    // New JWT cookie — used by API-level RBAC
     response.cookies.set('honeytrace_token', token, cookieOpts);
     return response;
 
@@ -39,9 +57,9 @@ export async function POST(req: NextRequest) {
   }
 }
 
+
 export async function DELETE() {
   const response = NextResponse.json({ success: true });
-  // Preserve original delete pattern
   response.cookies.delete('honeytrace_role');
   response.cookies.delete('honeytrace_token');
   return response;

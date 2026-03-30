@@ -13,6 +13,7 @@
     "@carbon/react": "^1.103.0",
     "bcryptjs": "^3.0.3",
     "ethers": "^6.16.0",
+    "jose": "^6.2.2",
     "jsonwebtoken": "^9.0.3",
     "leaflet": "^1.9.4",
     "mongoose": "^9.3.2",

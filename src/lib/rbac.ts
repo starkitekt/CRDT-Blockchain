@@ -1,42 +1,51 @@
+// src/lib/rbac.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyToken, JWTPayload } from './auth';
+import { verifyToken, JWTPayload } from '@/lib/auth';
 
-export type UserRole =
-  | 'farmer' | 'warehouse' | 'lab' | 'officer'
-  | 'enterprise' | 'consumer' | 'secretary' | 'admin';
+
+export type AuthPayload = JWTPayload;
+
 
 export class AuthError extends Error {
   constructor(public status: number, message: string) {
     super(message);
-    this.name = 'AuthError';
   }
 }
 
-/** Reads JWT from cookie and returns decoded payload or null */
-export function getAuthUser(req: NextRequest): JWTPayload | null {
-  const token = req.cookies.get('honeytrace_token')?.value;
-  if (!token) return null;
-  return verifyToken(token);
-}
 
-/**
- * Throws AuthError if:
- * - No valid JWT found → 401
- * - Role not in allowedRoles → 403
- */
+// Roles that are never blocked by KYC — they manage KYC themselves
+const KYC_EXEMPT_ROLES = new Set(['admin', 'secretary', 'consumer']);
+
+
 export function requireAuth(
   req: NextRequest,
-  allowedRoles?: UserRole[]
-): JWTPayload {
-  const user = getAuthUser(req);
-  if (!user) throw new AuthError(401, 'Unauthorized');
-  if (allowedRoles && !allowedRoles.includes(user.role as UserRole)) {
-    throw new AuthError(403, 'Forbidden: insufficient role');
+  allowedRoles?: string[]
+): AuthPayload {
+  const token = req.cookies.get('honeytrace_token')?.value;
+  if (!token) throw new AuthError(401, 'Authentication required');
+
+  const payload = verifyToken(token);
+  if (!payload) throw new AuthError(401, 'Invalid or expired token');
+
+  if (allowedRoles && !allowedRoles.includes(payload.role)) {
+    throw new AuthError(403, `Access denied. Required role: ${allowedRoles.join(' or ')}`);
   }
-  return user;
+
+  // ── KYC gate ───────────────────────────────────────────────────────────────
+  // Non-exempt roles must complete KYC before accessing any API
+  if (!KYC_EXEMPT_ROLES.has(payload.role) && !payload.kycCompleted) {
+    throw new AuthError(403, 'KYC verification required. Please complete your profile.');
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
+  return payload;
 }
 
-/** Converts AuthError → NextResponse. Use in every catch block. */
-export function handleAuthError(err: AuthError): NextResponse {
-  return NextResponse.json({ error: err.message }, { status: err.status });
+
+export function handleAuthError(err: unknown): NextResponse {
+  if (err instanceof AuthError) {
+    return NextResponse.json({ error: err.message }, { status: err.status });
+  }
+  console.error('[AuthError]', err);
+  return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
 }

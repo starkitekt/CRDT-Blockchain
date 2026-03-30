@@ -3,6 +3,7 @@ import { CreateRecallSchema } from '@/lib/validation/recall.schema';
 import { createRecall, listRecalls } from '@/lib/services/recall.service';
 import { requireAuth, handleAuthError, AuthError } from '@/lib/rbac';
 
+
 /** GET /api/recalls — list all recall events */
 export async function GET(req: NextRequest) {
   try {
@@ -15,31 +16,27 @@ export async function GET(req: NextRequest) {
   }
 }
 
+
 /** POST /api/recalls — initiate a batch recall */
 export async function POST(req: NextRequest) {
   try {
-    let actor;
-    try {
-      actor = requireAuth(req, ['officer', 'admin']);
-    } catch (err) {
-      if (err instanceof AuthError) return handleAuthError(err);
-    }
+    // ── Auth first — before body parse ───────────────────────────────────
+    const actor = requireAuth(req, ['officer', 'admin']);
 
     const body = await req.json();
-
     const parsed = CreateRecallSchema.safeParse(body);
     if (!parsed.success) {
-      // Preserve original error messages
       return NextResponse.json(
         { error: 'batchId, tier, reason, initiatedBy are required' },
         { status: 400 }
       );
     }
 
-    const data = await createRecall(parsed.data, actor?.userId, actor?.role);
+    const data = await createRecall(parsed.data, actor.userId, actor.role);
     return NextResponse.json({ data }, { status: 201 });
 
   } catch (err: any) {
+    if (err instanceof AuthError) return handleAuthError(err);
     if (err.message === 'BATCH_NOT_FOUND') {
       return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
     }
