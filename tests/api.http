@@ -1,0 +1,191 @@
+@baseUrl = http://localhost:3000
+
+### ─────────────────────────────────────────
+### AUTH TESTS
+### ─────────────────────────────────────────
+
+### Test 1 — Valid Login (Farmer)
+POST {{baseUrl}}/api/auth
+Content-Type: application/json
+
+{
+  "email": "farmer@honeytrace.in",
+  "password": "Farmer@123",
+  "role": "farmer"
+}
+
+### Test 2 — Valid Login (Lab)
+POST {{baseUrl}}/api/auth
+Content-Type: application/json
+
+{
+  "email": "lab@honeytrace.in",
+  "password": "Lab@1234",
+  "role": "lab"
+}
+
+### Test 3 — Valid Login (Admin)
+POST {{baseUrl}}/api/auth
+Content-Type: application/json
+
+{
+  "email": "admin@honeytrace.in",
+  "password": "Admin@123",
+  "role": "admin"
+}
+
+### Test 4 — Wrong Password
+POST {{baseUrl}}/api/auth
+Content-Type: application/json
+
+{
+  "email": "farmer@honeytrace.in",
+  "password": "wrongpass",
+  "role": "farmer"
+}
+
+### Test 5 — Wrong Role for Email
+POST {{baseUrl}}/api/auth
+Content-Type: application/json
+
+{
+  "email": "farmer@honeytrace.in",
+  "password": "Farmer@123",
+  "role": "admin"
+}
+
+### Test 6 — Logout
+DELETE {{baseUrl}}/api/auth
+
+### ─────────────────────────────────────────
+### BATCH TESTS (run Test 1 login first to get cookie)
+### ─────────────────────────────────────────
+
+### Test 7 — GET /api/batches (no auth = 401)
+GET {{baseUrl}}/api/batches
+
+### Test 8 — POST /api/batches (farmer creates batch)
+# NOTE: After running Test 1 login, copy the
+# honeytrace_token cookie value and paste below
+POST {{baseUrl}}/api/batches
+Content-Type: application/json
+Cookie: honeytrace_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OWM2NjRmZGNlYThiOGYxNmFlNzM1MmMiLCJlbWFpbCI6ImZhcm1lckBob25leXRyYWNlLmluIiwicm9sZSI6ImZhcm1lciIsImlhdCI6MTc3NDYxMDI0NCwiZXhwIjoxNzc0NjM5MDQ0fQ.nuJWRfK_50alkHA3VN0cg2nYFsfqcHKvIGvosUNk2S4
+
+{
+  "farmerId": "F-001",
+  "farmerName": "Ramesh Kumar",
+  "floraType": "Mustard",
+  "weightKg": 480,
+  "moisturePct": 17.2,
+  "latitude": "25.9067",
+  "longitude": "84.3600",
+  "grade": "A",
+  "harvestDate": "2026-03-27"
+}
+
+### Test 9 — POST /api/batches (moisture violation = 422)
+POST {{baseUrl}}/api/batches
+Content-Type: application/json
+Cookie: honeytrace_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OWM2NjRmZGNlYThiOGYxNmFlNzM1MmMiLCJlbWFpbCI6ImZhcm1lckBob25leXRyYWNlLmluIiwicm9sZSI6ImZhcm1lciIsImlhdCI6MTc3NDYxMDI0NCwiZXhwIjoxNzc0NjM5MDQ0fQ.nuJWRfK_50alkHA3VN0cg2nYFsfqcHKvIGvosUNk2S4
+
+{
+  "farmerId": "F-001",
+  "farmerName": "Ramesh Kumar",
+  "floraType": "Mustard",
+  "weightKg": 480,
+  "moisturePct": 25,
+  "latitude": "25.9067",
+  "longitude": "84.3600",
+  "grade": "A",
+  "harvestDate": "2026-03-27"
+}
+
+### Test 10 — GET /api/batches/:id (not found = 404)
+GET {{baseUrl}}/api/batches/HT-INVALID-000
+Cookie: honeytrace_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OWM2NjRmZGNlYThiOGYxNmFlNzM1MmMiLCJlbWFpbCI6ImZhcm1lckBob25leXRyYWNlLmluIiwicm9sZSI6ImZhcm1lciIsImlhdCI6MTc3NDYxMDI0NCwiZXhwIjoxNzc0NjM5MDQ0fQ.nuJWRfK_50alkHA3VN0cg2nYFsfqcHKvIGvosUNk2S4
+
+### ─────────────────────────────────────────
+### LAB TESTS
+### ─────────────────────────────────────────
+
+### Test 11 — POST /api/lab (Codex violation = 422)
+POST {{baseUrl}}/api/lab
+Content-Type: application/json
+Cookie: honeytrace_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OWM2NjUyYzBkOTExYTU3M2QxN2FmNDMiLCJlbWFpbCI6ImxhYkBob25leXRyYWNlLmluIiwicm9sZSI6ImxhYiIsImlhdCI6MTc3NDYxMDUwMCwiZXhwIjoxNzc0NjM5MzAwfQ.vkNXjsjpiLBSGW-gFWOMYDcdSVunDDdh3nNgm1MPYL0
+
+{
+  "batchId": "HT-20260327-001",
+  "sampleId": "SMP-001",
+  "labId": "L-001",
+  "fssaiLicense": "10016011000892",
+  "nablCert": "T-4521",
+  "moisture": 25,
+  "hmf": 38,
+  "pollenCount": 45000,
+  "acidity": 30,
+  "diastase": 10,
+  "sucrose": 3,
+  "reducingSugars": 65,
+  "conductivity": 0.4
+}
+
+### Test 12 — POST /api/lab (valid = 201)
+POST {{baseUrl}}/api/lab
+Content-Type: application/json
+Cookie: honeytrace_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OWM2NjUyYzBkOTExYTU3M2QxN2FmNDMiLCJlbWFpbCI6ImxhYkBob25leXRyYWNlLmluIiwicm9sZSI6ImxhYiIsImlhdCI6MTc3NDYxMDQwMCwiZXhwIjoxNzc0NjM5MjAwfQ.RcaUBtF21D3a9T98wCenuBEp3Sr9Sr1cdZ5nuoDgbnI
+
+{
+  "batchId": "HT-20260327-001",
+  "sampleId": "SMP-001",
+  "labId": "L-001",
+  "fssaiLicense": "10016011000892",
+  "nablCert": "T-4521",
+  "moisture": 17,
+  "hmf": 30,
+  "pollenCount": 45000,
+  "acidity": 30,
+  "diastase": 10,
+  "sucrose": 3,
+  "reducingSugars": 65,
+  "conductivity": 0.4
+}
+
+### ─────────────────────────────────────────
+### RECALL TESTS
+### ─────────────────────────────────────────
+
+### Step A — Login as Officer FIRST (get token for Test 13 & 14)
+POST {{baseUrl}}/api/auth
+Content-Type: application/json
+
+{
+  "email": "officer@honeytrace.in",
+  "password": "Officer@123",
+  "role": "officer"
+}
+
+### Test 13 — POST /api/recalls (officer creates recall)
+POST {{baseUrl}}/api/recalls
+Content-Type: application/json
+Cookie: honeytrace_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OWM2NjRmZWNlYThiOGYxNmFlNzM1MzIiLCJlbWFpbCI6Im9mZmljZXJAaG9uZXl0cmFjZS5pbiIsInJvbGUiOiJvZmZpY2VyIiwiaWF0IjoxNzc0NjEwNzYxLCJleHAiOjE3NzQ2Mzk1NjF9.wQEyD8-2DdRwmBcJhDbPCYL88zfihEc9XlmTPeaFKVc
+
+{
+  "batchId": "HT-20260327-001",
+  "tier": 1,
+  "reason": "Antibiotic residue above FSSAI limit",
+  "affectedKg": 480,
+  "initiatedBy": "officer@honeytrace.in"
+}
+
+### Test 14 — POST /api/recalls (duplicate = 409)
+POST {{baseUrl}}/api/recalls
+Content-Type: application/json
+Cookie: honeytrace_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OWM2NjRmZWNlYThiOGYxNmFlNzM1MzIiLCJlbWFpbCI6Im9mZmljZXJAaG9uZXl0cmFjZS5pbiIsInJvbGUiOiJvZmZpY2VyIiwiaWF0IjoxNzc0NjEwNzYxLCJleHAiOjE3NzQ2Mzk1NjF9.wQEyD8-2DdRwmBcJhDbPCYL88zfihEc9XlmTPeaFKVc
+
+{
+  "batchId": "HT-20260327-001",
+  "tier": 1,
+  "reason": "Duplicate recall attempt",
+  "affectedKg": 480,
+  "initiatedBy": "officer@honeytrace.in"
+}

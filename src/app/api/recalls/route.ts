@@ -1,46 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { recalls, batches, RecallEvent } from '@/lib/store';
+import { CreateRecallSchema } from '@/lib/validation/recall.schema';
+import { createRecall, listRecalls } from '@/lib/services/recall.service';
+import { requireAuth, handleAuthError, AuthError } from '@/lib/rbac';
 
 /** GET /api/recalls — list all recall events */
-export async function GET() {
-  return NextResponse.json({ data: Array.from(recalls.values()) });
+export async function GET(req: NextRequest) {
+  try {
+    requireAuth(req, ['officer', 'admin', 'secretary', 'enterprise']);
+    const data = await listRecalls();
+    return NextResponse.json({ data });
+  } catch (err) {
+    if (err instanceof AuthError) return handleAuthError(err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
 }
 
 /** POST /api/recalls — initiate a batch recall */
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as { batchId: string; tier: 1 | 2 | 3; reason: string; affectedKg: number; initiatedBy: string };
-
-    if (!body.batchId || !body.tier || !body.reason || !body.initiatedBy) {
-      return NextResponse.json({ error: 'batchId, tier, reason, initiatedBy are required' }, { status: 400 });
-    }
-    if (typeof body.affectedKg !== 'number' || body.affectedKg < 0) {
-      return NextResponse.json({ error: 'affectedKg must be a non-negative number' }, { status: 400 });
+    let actor;
+    try {
+      actor = requireAuth(req, ['officer', 'admin']);
+    } catch (err) {
+      if (err instanceof AuthError) return handleAuthError(err);
     }
 
-    const batch = batches.get(body.batchId);
-    if (!batch) return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
+    const body = await req.json();
 
-    if (batch.status === 'recalled') {
+    const parsed = CreateRecallSchema.safeParse(body);
+    if (!parsed.success) {
+      // Preserve original error messages
+      return NextResponse.json(
+        { error: 'batchId, tier, reason, initiatedBy are required' },
+        { status: 400 }
+      );
+    }
+
+    const data = await createRecall(parsed.data, actor?.userId, actor?.role);
+    return NextResponse.json({ data }, { status: 201 });
+
+  } catch (err: any) {
+    if (err.message === 'BATCH_NOT_FOUND') {
+      return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
+    }
+    if (err.message === 'ALREADY_RECALLED') {
       return NextResponse.json({ error: 'Batch already recalled' }, { status: 409 });
     }
-
-    const id = `RECALL-${Date.now()}`;
-    const event: RecallEvent = {
-      id,
-      batchId: body.batchId,
-      tier: body.tier,
-      reason: body.reason,
-      affectedKg: body.affectedKg,
-      initiatedBy: body.initiatedBy,
-      initiatedAt: new Date().toISOString(),
-    };
-
-    recalls.set(id, event);
-    batches.set(body.batchId, { ...batch, status: 'recalled' });
-
-    return NextResponse.json({ data: event }, { status: 201 });
-  } catch {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 }
