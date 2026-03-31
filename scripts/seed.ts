@@ -1,7 +1,10 @@
+import { config as loadEnv } from 'dotenv';
 import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
 import { User } from '../src/lib/models/User';
 import { AnyUserSchema } from '../src/lib/validation/user.schema';
+
+loadEnv({ path: '.env.local' });
 
 const MONGODB_URI = process.env.MONGODB_URI!;
 const isReset = process.argv.includes('--reset');

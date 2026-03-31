@@ -3,6 +3,7 @@ import { Recall } from '../models/Recall';
 import { Batch } from '../models/Batch';
 import { auditLog } from '../audit';
 import { CreateRecallInput } from '../validation/recall.schema';
+import { anchorRecallOnChain, isBlockchainRelayEnabled } from '../blockchain-relay';
 
 function stripInternal(doc: any) {
   const { _id, __v, ...rest } = doc;
@@ -28,6 +29,12 @@ export async function createRecall(
     id: recallId,
     initiatedAt,
   });
+
+  if (isBlockchainRelayEnabled()) {
+    const txHash = await anchorRecallOnChain(input.batchId, input.tier, input.reason);
+    recall.onChainTxHash = txHash;
+    await recall.save();
+  }
 
   batch.status = 'recalled';
   await batch.save();
