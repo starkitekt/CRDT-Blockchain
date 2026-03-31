@@ -231,15 +231,10 @@ const HoneyHeader = () => {
   return (
     <>
       <HeaderContainer
-        // AFTER
-        render={({
-          isSideNavExpanded,
-          onClickSideNavExpand,
-        }: {
-          isSideNavExpanded: boolean;
-          onClickSideNavExpand: () => void;
-        }) => (
-          <Header aria-label={ti("title")}>
+        render={(props: { isSideNavExpanded: boolean; onClickSideNavExpand: () => void }) => {
+          const { isSideNavExpanded, onClickSideNavExpand } = props;
+          return (
+            <Header aria-label={ti('title')}>
             <HeaderMenuButton
               aria-label="Open menu"
               onClick={onClickSideNavExpand}
@@ -313,7 +308,8 @@ const HoneyHeader = () => {
               </SideNavItems>
             </SideNav>
           </Header>
-        )}
+          );
+        }}
       />
 
       {/* Logout confirmation dialog */}

@@ -4,6 +4,7 @@ import { Batch } from '../models/Batch';
 import { getNextSeq } from '../models/Counter';
 import { auditLog } from '../audit';
 import { CreateBatchInput, PatchBatchInput } from '../validation/batch.schema';
+import { anchorBatchOnChain, isBlockchainRelayEnabled } from '../blockchain-relay';
 
 function formatBatchId(seq: number): string {
   const n = new Date();
@@ -68,6 +69,24 @@ export async function createBatch(
     createdAt: now,
     _payloadHash: fingerprint,
   });
+
+  if (isBlockchainRelayEnabled()) {
+    const txHash = await anchorBatchOnChain(
+      batchId,
+      {
+        farmerId: input.farmerId,
+        floraType: input.floraType,
+        weightKg: input.weightKg,
+        harvestDate: input.harvestDate,
+        moisturePct: input.moisturePct,
+        grade: input.grade,
+      },
+      'HARVESTED',
+      `${input.latitude},${input.longitude}`
+    );
+    batch.onChainTxHash = txHash;
+    await batch.save();
+  }
 
   await auditLog({
     entityType: 'batch',

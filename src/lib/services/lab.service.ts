@@ -3,6 +3,7 @@ import { LabResult } from '../models/LabResult';
 import { Batch } from '../models/Batch';
 import { auditLog } from '../audit';
 import { CreateLabResultInput } from '../validation/lab.schema';
+import { anchorLabResultOnChain, isBlockchainRelayEnabled } from '../blockchain-relay';
 
 /** Codex Stan 12-1981 — returns human-readable violation strings */
 function runCodexValidation(d: CreateLabResultInput): string[] {
@@ -47,7 +48,13 @@ export async function publishLabResult(
     { batchId: input.batchId },
     { ...input, publishedAt },
     { upsert: true, new: true }
-  ).lean();
+  );
+
+  if (isBlockchainRelayEnabled()) {
+    const txHash = await anchorLabResultOnChain(input.batchId, input);
+    result.onChainTxHash = txHash;
+    await result.save();
+  }
 
   // Certify the batch
   batch.status = 'certified';
@@ -65,7 +72,7 @@ export async function publishLabResult(
     },
   });
 
-  return stripInternal(result);
+  return stripInternal(result.toObject());
 }
 
 export async function listLabResults() {

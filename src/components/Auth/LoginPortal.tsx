@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Tile,
   Button,
@@ -24,7 +24,7 @@ import {
   Collaborate,
   CheckmarkFilled,
 } from '@carbon/icons-react';
-import { useRouter, usePathname } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { authApi, ApiError } from '@/lib/api';
 
@@ -49,7 +49,6 @@ const DEMO_CREDENTIALS = {
 };
 
 export default function LoginPortal() {
-  const router   = useRouter();
   const pathname = usePathname();
   const t  = useTranslations('Auth');
   const tr = useTranslations('Roles');
@@ -63,6 +62,18 @@ export default function LoginPortal() {
   const [signupPassword, setSignupPassword] = useState('');
   const [demoFilled, setDemoFilled]   = useState(false);
   const [authError, setAuthError]     = useState<string | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  const resolveRoleFromEmail = (value: string): string => {
+    const found = Object.entries(DEMO_CREDENTIALS).find(([, creds]) => creds.email === value);
+    return found ? found[0] : '';
+  };
+
+  const effectiveRole = selectedRole || resolveRoleFromEmail(email);
 
   const handleRoleChange = (roleId: string) => {
     setSelectedRole(roleId);
@@ -80,18 +91,27 @@ export default function LoginPortal() {
     }
   };
 
-  const handleLogin = async (e: React.SyntheticEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleLogin = async () => {
     setAuthError(null);
+    const roleForLogin = effectiveRole;
+    if (!roleForLogin) {
+      setAuthError('Please select a role before signing in.');
+      return;
+    }
+
     setLoading(true);
     try {
-      await authApi.login(email, password, selectedRole);
-      router.push(`/${locale}/dashboard/${selectedRole}`);
-      router.refresh(); // Force middleware to re-read the new cookie
+      await authApi.login(email, password, roleForLogin);
+      window.location.assign(`/${locale}/dashboard/${roleForLogin}`);
     } catch (err) {
       setAuthError(err instanceof ApiError ? err.message : 'Login failed. Please try again.');
       setLoading(false);
     }
+  };
+
+  const handleLoginSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    void handleLogin();
   };
 
   const handleSignup = (e: React.SyntheticEvent<HTMLFormElement>) => {
@@ -101,11 +121,16 @@ export default function LoginPortal() {
 
   const handleKYCSubmit = async () => {
     setAuthError(null);
+    const roleForLogin = effectiveRole;
+    if (!roleForLogin) {
+      setAuthError('Please select a role before continuing verification.');
+      return;
+    }
+
     setLoading(true);
     try {
-      await authApi.login(email, password, selectedRole);
-      router.push(`/${locale}/dashboard/${selectedRole}`);
-      router.refresh();
+      await authApi.login(email, password, roleForLogin);
+      window.location.assign(`/${locale}/dashboard/${roleForLogin}`);
     } catch (err) {
       setAuthError(err instanceof ApiError ? err.message : 'Verification failed. Please try again.');
       setLoading(false);
@@ -138,7 +163,7 @@ export default function LoginPortal() {
           <div className="p-8">
 
             {mode === 'login' && (
-              <form onSubmit={handleLogin}>
+              <form onSubmit={handleLoginSubmit} data-auth-hydrated={isHydrated ? 'true' : 'false'}>
                 <Stack gap={5}>
                   <div>
                     <h2 className="text-2xl font-black text-text-primary">{t('welcomeBack')}</h2>
@@ -202,8 +227,9 @@ export default function LoginPortal() {
                     className="w-full flex justify-center !min-w-full"
                     size="lg"
                     renderIcon={Login}
-                    type="submit"
-                    disabled={loading || !selectedRole}
+                    type="button"
+                    onClick={() => { void handleLogin(); }}
+                    disabled={loading}
                     kind="primary"
                   >
                     {loading ? t('authenticating') : t('signIn')}

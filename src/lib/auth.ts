@@ -23,6 +23,7 @@ export function signToken(payload: Omit<JWTPayload, "iat" | "exp">): string {
 
 export function verifyToken(token: string): JWTPayload | null {
   try {
+    if (!JWT_SECRET) return null;
     return jwt.verify(token, JWT_SECRET) as JWTPayload;
   } catch {
     return null;
