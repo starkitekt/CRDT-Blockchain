@@ -27,6 +27,7 @@ import IdentityVerificationModal from '@/components/Onboarding/IdentityVerificat
 import PriorStepQR from '@/components/Traceability/PriorStepQR';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
 import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
+import CopyableValue from '@/components/CopyableValue';
 import { useBatches } from '@/hooks/useBatches';
 import { batchesApi, ApiError } from '@/lib/api';
 
@@ -125,6 +126,7 @@ export default function EnterpriseDashboard() {
         <div className="p-spacing-md bg-slate-50 rounded-xl border border-slate-100 font-mono text-[11px] text-slate-600">
           IMMUTABLE_SIGNATURE_PAYLOAD: 0x22F...B921 · ENTITY: ENT-880 · {new Date().toISOString()}
         </div>
+        <CopyableValue value="0x22F...B921" label="Copy Hash" className="mt-2 min-h-0 h-7 px-2" />
         {signError && (
           <div className="mt-spacing-md">
             <InlineNotification kind="error" title="Error" subtitle={signError} lowContrast hideCloseButton />
@@ -294,6 +296,7 @@ export default function EnterpriseDashboard() {
                    <div className="p-4 bg-black/40 rounded-xl font-mono text-[10px] text-primary/60 ring-1 ring-white/5 shadow-inner">
                       IMMUTABLE_SIGNATURE_PAYLOAD: 0x22F...B921
                    </div>
+                   <CopyableValue value="0x22F...B921" label="Copy Hash" className="text-primary min-h-0 h-7 px-2" />
                 </div>
                 <Stack gap={4}>
                    <Button size="lg" kind="primary" className="w-full !max-w-none h-14 !rounded-xl shadow-2xl" renderIcon={ShoppingCart} onClick={() => { setActionBatch('B-22'); setIsSignConfirmOpen(true); }} disabled={signedBatches.includes('B-22')}>

@@ -1,7 +1,7 @@
 # Page snapshot
 
 ```yaml
-- generic [active] [ref=e1]:
+- generic [ref=e1]:
   - link "Skip to main content" [ref=e2] [cursor=pointer]:
     - /url: "#main-content"
   - banner "HoneyTRACE System" [ref=e3]:
@@ -57,7 +57,7 @@
             - generic [ref=e63]:
               - heading "Farmer's Harvest Portal" [level=1] [ref=e64]
               - paragraph [ref=e65]: Immutable ledger for premium honey batches. Trace every gram from origin to outcome.
-            - button "Record New Harvest" [ref=e67] [cursor=pointer]:
+            - button "Record New Harvest" [active] [ref=e67] [cursor=pointer]:
               - text: Record New Harvest
               - img [ref=e68]
           - main [ref=e70]:
@@ -101,7 +101,7 @@
                       - generic [ref=e127]: Timestamp
                       - generic [ref=e128]:
                         - img [ref=e129]
-                        - generic [ref=e132]: 11:01:01 UTC
+                        - generic [ref=e132]: 22:01:33 UTC
                   - generic [ref=e134]: Geo-spatial Verification Secured
                 - generic [ref=e137]:
                   - img [ref=e139]
