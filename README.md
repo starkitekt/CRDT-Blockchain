@@ -194,3 +194,124 @@ Transaction hash/ID copy controls are available in dashboard and traceability su
 npm run build
 npm run start
 ```
+
+## Host Everything (Local to Production)
+
+This project supports a scripted promotion path for:
+
+- localhost chain -> Base Sepolia
+- local backend (Next.js API routes) -> online on Vercel
+- local frontend -> Vercel production
+
+### 1) Pre-Deployment Checklist
+
+Create and populate production deployment values:
+
+```bash
+cp .env.production.example .env.production.local
+```
+
+Set all required values in `.env.production.local`:
+
+- `BASE_SEPOLIA_RPC_URL`
+- `DEPLOYER_PRIVATE_KEY`
+- `BLOCKCHAIN_RELAYER_PRIVATE_KEY`
+- `MONGODB_URI_PROD`
+- `JWT_SECRET_PROD`
+
+Optional:
+
+- `NEXT_PUBLIC_MIN_BALANCE_ETH`
+- `PLAYWRIGHT_BASE_URL` (for hosted E2E)
+- `VERCEL_TOKEN` (for non-interactive CI deploys)
+
+Load variables in your shell:
+
+```bash
+set -a
+source .env.production.local
+set +a
+```
+
+If you use fish shell:
+
+```fish
+while read -l line
+	if test -z "$line"
+		continue
+	end
+	set parts (string split -m1 '=' "$line")
+	if test (count $parts) -ge 2
+		set -gx $parts[1] $parts[2]
+	end
+end < .env.production.local
+```
+
+### 2) One-Command Promotion
+
+Dry run first:
+
+```bash
+npm run prod:push:dry
+```
+
+Promote to production:
+
+```bash
+npm run prod:push
+```
+
+What this script does:
+
+1. Runs chain and unit checks (unless `--skip-checks` is provided)
+2. Compiles contracts
+3. Deploys `HoneyTraceRegistry` to Base Sepolia
+4. Syncs ABI and Base Sepolia contract address
+5. Pushes backend/frontend env vars to Vercel production
+6. Triggers `vercel deploy --prod`
+
+Script location:
+
+- `scripts/push-local-to-prod.sh`
+
+### 3) Accounts to Fund in Advance
+
+Fund these wallet addresses on Base Sepolia with test ETH:
+
+1. Deployer account (`DEPLOYER_PRIVATE_KEY`): contract deployment gas
+2. Relayer account (`BLOCKCHAIN_RELAYER_PRIVATE_KEY`): runtime write gas from backend API
+
+If deployer and relayer are the same key, one funded account is enough.
+
+### 4) APIs/Services You Must Provide
+
+1. Base Sepolia RPC endpoint:
+	Examples: Alchemy, Infura, QuickNode, Ankr, or another reliable RPC provider
+2. Production MongoDB connection string:
+	Recommended: MongoDB Atlas URI for `MONGODB_URI_PROD`
+	Ensure your deploy region and seed/test runner IP are allowed in Atlas Network Access.
+3. Vercel project access:
+	`npx vercel login` locally, or `VERCEL_TOKEN` for CI
+
+### 5) Vercel Requirements
+
+Before the first deploy, link the repository once:
+
+```bash
+npx vercel link
+```
+
+Then run `npm run prod:push`.
+
+### 6) Hosted End-to-End Validation
+
+After production deploy:
+
+1. Set `PLAYWRIGHT_BASE_URL` to your live URL
+2. Run:
+
+```bash
+npm run test:e2e
+```
+
+This validates frontend role flows against hosted backend/frontend.

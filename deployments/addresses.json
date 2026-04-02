@@ -1,8 +1,8 @@
 {
   "localhost": {
-    "HoneyTraceRegistry": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+    "HoneyTraceRegistry": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
   },
   "baseSepolia": {
-    "HoneyTraceRegistry": ""
+    "HoneyTraceRegistry": "0x2D85452bed2DE0613E09a8CC2d9C0e4beC26D8b6"
   }
 }

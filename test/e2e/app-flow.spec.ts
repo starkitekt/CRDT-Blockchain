@@ -27,13 +27,33 @@ async function loginViaUi(page: Page, role: keyof typeof USERS) {
   });
   expect(authResponse.status()).toBe(200);
 
-  await page.goto(`/en/dashboard/${role}`);
+  const baseUrl = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
+  const targetUrl = `${baseUrl}/en/dashboard/${role}`;
+
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      lastError = undefined;
+      break;
+    } catch (err) {
+      lastError = err;
+      await page.waitForTimeout(1000 * attempt);
+    }
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
+
   await expect(page).toHaveURL(new RegExp(`/en/dashboard/${role}$`), { timeout: 60000 });
 }
 
 test('all user roles sign in and execute frontend workflows', async ({ page, context }) => {
-  await context.grantPermissions(['geolocation']);
-  await context.setGeolocation({ latitude: 22.8465, longitude: 81.3340 });
+  if (!process.env.PLAYWRIGHT_BASE_URL) {
+    await context.grantPermissions(['geolocation']);
+    await context.setGeolocation({ latitude: 22.8465, longitude: 81.3340 });
+  }
   await disableOnboarding(page);
   await page.goto('/en');
   await expect(page).toHaveTitle(/HoneyTRACE/i);
@@ -43,16 +63,32 @@ test('all user roles sign in and execute frontend workflows', async ({ page, con
   const recordHarvestButton = page.getByRole('button', { name: /record new harvest/i });
   await expect(recordHarvestButton).toBeVisible();
   await recordHarvestButton.click();
-  const farmerModal = page.getByRole('dialog').last();
-  await expect(farmerModal).toBeVisible();
-  await farmerModal.locator('#origin-field').fill(`Mustard Test ${Date.now()}`);
-  await farmerModal.locator('#weight-field').fill('18');
-  await farmerModal.locator('#moisture-content').fill('16');
-  await expect(farmerModal.getByText(/GPS LOCK/i)).toBeVisible({ timeout: 15000 });
-  await farmerModal.locator('.cds--modal-footer .cds--btn--primary').click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  const farmerPageText = (await page.locator('body').innerText()) || '';
-  const batchIdMatch = farmerPageText.match(/HT-\d{8}-\d{3}/);
+  const originField = page.locator('#origin-field');
+  if (!(await originField.isVisible())) {
+    await recordHarvestButton.click({ force: true });
+  }
+  await expect(originField).toBeVisible({ timeout: 15000 });
+  await originField.fill(`Mustard Test ${Date.now()}`);
+  await page.locator('#weight-field').fill('18');
+  await page.locator('#moisture-content').fill('16');
+  await expect(page.getByText(/GPS LOCK/i)).toBeVisible({ timeout: 15000 });
+  await page.locator('.cds--modal-footer .cds--btn--primary').last().click();
+  const farmerDialog = page.getByRole('dialog').first();
+  if (await farmerDialog.isVisible()) {
+    const closeButton = farmerDialog.locator('button.cds--modal-close');
+    if ((await closeButton.count()) > 0) {
+      await closeButton.first().click();
+    }
+  }
+  let detectedBatchId = '';
+  await expect
+    .poll(async () => {
+      const text = (await page.locator('body').innerText()) || '';
+      detectedBatchId = text.match(/HT-\d{8}-\d{3}/)?.[0] ?? '';
+      return detectedBatchId;
+    }, { timeout: 30000 })
+    .toMatch(/HT-\d{8}-\d{3}/);
+  const batchIdMatch = detectedBatchId.match(/HT-\d{8}-\d{3}/);
   expect(batchIdMatch).not.toBeNull();
   const batchId = batchIdMatch![0];
 

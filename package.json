@@ -19,6 +19,8 @@
     "local:up": "bash scripts/localhost.sh up",
     "local:down": "bash scripts/localhost.sh down",
     "local:check": "bash scripts/localhost.sh check",
+    "prod:push": "bash scripts/push-local-to-prod.sh",
+    "prod:push:dry": "bash scripts/push-local-to-prod.sh --dry-run",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
     "test:all": "npm run chain:test && npm run test:unit && npm run test:e2e"

@@ -24,7 +24,10 @@ function copyAbi() {
 
 function syncLocalAddress() {
   const addressesPath = path.join(process.cwd(), 'deployments', 'addresses.json');
-  const envPath = path.join(process.cwd(), '.env.local');
+  const envFile = process.env.SYNC_ENV_FILE || '.env.local';
+  const envPath = path.join(process.cwd(), envFile);
+  const key = process.env.SYNC_CONTRACT_ENV_KEY || 'NEXT_PUBLIC_HONEYTRACE_CONTRACT';
+  const preferredNetwork = process.env.SYNC_NETWORK;
 
   if (!fs.existsSync(addressesPath)) {
     console.log(`No ${addressesPath} found, skipping env sync.`);
@@ -32,29 +35,33 @@ function syncLocalAddress() {
   }
 
   const addresses = JSON.parse(fs.readFileSync(addressesPath, 'utf8'));
-  const localAddress =
-    addresses.localhost?.HoneyTraceRegistry ||
-    addresses.hardhat?.HoneyTraceRegistry ||
-    addresses.baseSepolia?.HoneyTraceRegistry;
+  const selectedAddress = preferredNetwork
+    ? addresses[preferredNetwork]?.HoneyTraceRegistry
+    : (addresses.localhost?.HoneyTraceRegistry ||
+      addresses.hardhat?.HoneyTraceRegistry ||
+      addresses.baseSepolia?.HoneyTraceRegistry);
 
-  if (!localAddress) {
-    console.log('No deployed HoneyTraceRegistry address found in deployments file.');
+  if (!selectedAddress) {
+    console.log(
+      preferredNetwork
+        ? `No HoneyTraceRegistry address found for network "${preferredNetwork}".`
+        : 'No deployed HoneyTraceRegistry address found in deployments file.'
+    );
     return;
   }
 
-  const key = 'NEXT_PUBLIC_HONEYTRACE_CONTRACT';
-  const line = `${key}=${localAddress}`;
+  const line = `${key}=${selectedAddress}`;
   const existing = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
 
   if (!existing.includes(`${key}=`)) {
     fs.writeFileSync(envPath, `${existing.trim()}\n${line}\n`.trimStart(), 'utf8');
-    console.log(`Added ${key} to .env.local`);
+    console.log(`Added ${key} to ${envFile}`);
     return;
   }
 
   const updated = existing.replace(new RegExp(`^${key}=.*$`, 'm'), line);
   fs.writeFileSync(envPath, updated, 'utf8');
-  console.log(`Updated ${key} in .env.local`);
+  console.log(`Updated ${key} in ${envFile}`);
 }
 
 copyAbi();
