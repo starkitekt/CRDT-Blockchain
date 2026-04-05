@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 import {
   Tile,
   Button,
@@ -72,6 +73,7 @@ function validateLabForm(v: LabFormValues): Record<string, string> {
 }
 
 export default function LabDashboard() {
+  const currentUser = useCurrentUser();
   const tOnboarding = useTranslations('Onboarding.lab');
   const tDashboard = useTranslations('Dashboard.lab');
   const { isTourOpen, isKYCOpen, completeKYC, completeTour, closeTour } = useOnboarding({ role: 'lab', hasKYC: true });
@@ -133,7 +135,7 @@ export default function LabDashboard() {
       await labApi.publish({
         batchId:        selectedBatchId,
         sampleId:       `LAB-${Date.now()}`,
-        labId:          'L-001',
+        labId:          currentUser.userId,
         fssaiLicense:   form.fssaiLicense,
         nablCert:       form.nablCert,
         moisture:       parseFloat(form.moisture),
@@ -429,3 +431,4 @@ export default function LabDashboard() {
     </UnifiedDashboardLayout>
   );
 }
+

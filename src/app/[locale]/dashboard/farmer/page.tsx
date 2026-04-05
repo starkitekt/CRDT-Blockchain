@@ -23,6 +23,7 @@ import {
 } from '@carbon/react';
 import { Add, Sun, Chemistry, Growth, Location, QrCode } from '@carbon/icons-react';
 import { useOnboarding } from '@/hooks/useOnboarding';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useBatches } from '@/hooks/useBatches';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { batchesApi, ApiError } from '@/lib/api';
@@ -33,17 +34,17 @@ import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
 import PriorStepQR from '@/components/Traceability/PriorStepQR';
 import EmptyState from '@/components/EmptyState';
 
-// Demo farmer ID — in production read from session/cookie
-const FARMER_ID = 'F-001';
 
-export default function FarmerDashboard({ params }: { params: Promise<{ locale: string }> }) {
+export default function FarmerDashboard({
+  params }: { params: Promise<{ locale: string }> }) {
+  const currentUser = useCurrentUser();
   const { locale } = React.use(params);
   const t = useTranslations('Dashboard.farmer');
   const tTour = useTranslations('Onboarding.farmer');
   const { isTourOpen, isKYCOpen: isOnboardingOpen, completeKYC: completeOnboarding, completeTour, closeTour } = useOnboarding({ role: 'farmer', hasKYC: true });
 
   // ── Data ──────────────────────────────────────────────────────────────────
-  const { batches, loading, error: fetchError, refresh } = useBatches({ farmerId: FARMER_ID });
+  const { batches, loading, error: fetchError, refresh } = useBatches({ farmerId:   currentUser.userId });
   const { notifications: syncNotifs, dismiss: dismissSync } = useOfflineSync();
 
   // ── Modal / form state ────────────────────────────────────────────────────
@@ -118,8 +119,8 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
 
     try {
       await batchesApi.create({
-        farmerId:   FARMER_ID,
-        farmerName: 'Ramesh Kumar',
+        farmerId:   currentUser.userId,
+        farmerName: currentUser.name,
         floraType,
         weightKg:   weight,
         moisturePct: moistureValue,
@@ -175,7 +176,7 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
     <UnifiedDashboardLayout header={pageHeader}>
       {isOnboardingOpen && (
         <SimplifiedFarmerOnboarding
-          farmerName="Ramesh Kumar"
+          farmerName={currentUser.name}
           onCompleteAction={completeOnboarding}
         />
       )}
@@ -374,3 +375,4 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
     </UnifiedDashboardLayout>
   );
 }
+

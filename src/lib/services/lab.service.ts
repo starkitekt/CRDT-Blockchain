@@ -1,19 +1,19 @@
-import { connectDB } from '../mongodb';
+﻿import { connectDB } from '../mongodb';
 import { LabResult } from '../models/LabResult';
 import { Batch } from '../models/Batch';
 import { auditLog } from '../audit';
 import { CreateLabResultInput } from '../validation/lab.schema';
 import { anchorLabResultOnChain, isBlockchainRelayEnabled } from '../blockchain-relay';
 
-/** Codex Stan 12-1981 — returns human-readable violation strings */
+/** Codex Stan 12-1981 â€” returns human-readable violation strings */
 function runCodexValidation(d: CreateLabResultInput): string[] {
   const v: string[] = [];
-  if (d.moisture       > 20) v.push(`Moisture ${d.moisture}% exceeds Codex limit of 20%`);
-  if (d.hmf            > 40) v.push(`HMF ${d.hmf} mg/kg exceeds Codex limit of 40 mg/kg`);
-  if (d.sucrose        > 5)  v.push(`Sucrose ${d.sucrose}% exceeds Codex limit of 5%`);
+  if (d.moisture > 20) v.push(`Moisture ${d.moisture}% exceeds Codex limit of 20%`);
+  if (d.hmf > 40) v.push(`HMF ${d.hmf} mg/kg exceeds Codex limit of 40 mg/kg`);
+  if (d.sucrose > 5) v.push(`Sucrose ${d.sucrose}% exceeds Codex limit of 5%`);
   if (d.reducingSugars < 60) v.push(`Reducing sugars ${d.reducingSugars}% below Codex minimum of 60%`);
-  if (d.diastase       < 8)  v.push(`Diastase activity ${d.diastase} DN below Codex minimum of 8 DN`);
-  if (d.acidity        > 50) v.push(`Free acidity ${d.acidity} meq/kg exceeds Codex limit of 50 meq/kg`);
+  if (d.diastase < 8) v.push(`Diastase activity ${d.diastase} DN below Codex minimum of 8 DN`);
+  if (d.acidity > 50) v.push(`Free acidity ${d.acidity} meq/kg exceeds Codex limit of 50 meq/kg`);
   return v;
 }
 
@@ -29,7 +29,7 @@ export async function publishLabResult(
 ) {
   await connectDB();
 
-  const batch = await Batch.findOne({ id: input.batchId });
+  const batch = await Batch.findOne({ batchId: input.batchId });
   if (!batch) {
     throw new Error('BATCH_NOT_FOUND');
   }

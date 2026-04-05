@@ -32,7 +32,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const data = await createRecall(parsed.data, actor.userId, actor.role);
+    const data = await createRecall(
+      { ...parsed.data, initiatedBy: actor.userId },
+      actor.userId,
+      actor.role
+    );
     return NextResponse.json({ data }, { status: 201 });
 
   } catch (err: any) {

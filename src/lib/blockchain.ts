@@ -155,7 +155,13 @@ export async function readBatchFromChain(
   provider: BrowserProvider,
   chainId: number,
   batchId: string,
-): Promise<{ dataHash: string; timestamp: number; recorder: string; bizStep: string } | null> {
+): Promise<{
+  dataHash: string;
+  timestamp: number;
+  recorder: string;
+  bizStep: string;
+  location: string;        // ← add this
+} | null> {
   const address = resolveContractAddress(chainId);
   if (!address) return null;
 
@@ -164,9 +170,10 @@ export async function readBatchFromChain(
     const result = await contract.getBatch(batchId);
     return {
       dataHash: result.dataHash,
-      timestamp: Number(result.timestamp) * 1000, // convert to ms
+      timestamp: Number(result.timestamp) * 1000,
       recorder: result.recorder,
       bizStep: result.bizStep,
+      location: result.location,    // ← add this
     };
   } catch {
     return null;

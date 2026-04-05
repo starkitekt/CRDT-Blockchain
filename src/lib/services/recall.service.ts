@@ -17,7 +17,7 @@ export async function createRecall(
 ) {
   await connectDB();
 
-  const batch = await Batch.findOne({ id: input.batchId });
+  const batch = await Batch.findOne({ batchId: input.batchId });
   if (!batch) throw new Error('BATCH_NOT_FOUND');
   if (batch.status === 'recalled') throw new Error('ALREADY_RECALLED');
 

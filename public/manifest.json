@@ -1,12 +1,12 @@
-{
-  "name": "HoneyTRACE — Blockchain Traceability",
+﻿{
+  "name": "HoneyTRACE â€” Blockchain Traceability",
   "short_name": "HoneyTRACE",
   "description": "GS1 EPCIS 2.0 compliant honey supply-chain traceability powered by blockchain",
   "start_url": "/en",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "theme_color": "#f59e0b",
+  "theme_color": "#f5a623",
   "background_color": "#ffffff",
   "lang": "en-IN",
   "categories": ["food", "productivity", "utilities"],

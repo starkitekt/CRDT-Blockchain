@@ -4,7 +4,7 @@ import { createBatch, listBatches } from '@/lib/services/batch.service';
 import { requireAuth, handleAuthError, AuthError } from '@/lib/rbac';
 
 
-const READ_ROLES  = ['farmer', 'warehouse', 'lab', 'officer', 'enterprise', 'admin'];
+const READ_ROLES = ['farmer', 'warehouse', 'lab', 'officer', 'enterprise', 'admin'];
 const WRITE_ROLES = ['farmer', 'admin'];
 
 
@@ -14,13 +14,23 @@ export async function GET(req: NextRequest) {
     requireAuth(req, READ_ROLES);
 
     const farmerId = req.nextUrl.searchParams.get('farmerId') ?? undefined;
-    const status   = req.nextUrl.searchParams.get('status')   ?? undefined;
+    const status = req.nextUrl.searchParams.get('status') ?? undefined;
     const data = await listBatches(farmerId, status);
     return NextResponse.json({ data });
 
-  } catch (err) {
+  } catch (err: any) {
     if (err instanceof AuthError) return handleAuthError(err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    if (err.message === 'MOISTURE_VIOLATION') {
+      return NextResponse.json(
+        { error: 'Moisture content exceeds Codex limit of 20%' },
+        { status: 422 }
+      );
+    }
+    // Show real error in dev so you can diagnose
+    const msg = process.env.NODE_ENV === 'development'
+      ? err.message ?? String(err)
+      : 'Invalid request body';
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 }
 
@@ -48,6 +58,10 @@ export async function POST(req: NextRequest) {
         { status: 422 }
       );
     }
-    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+    console.error('[POST /api/batches]', err); // ← ADD this line
+    const msg = process.env.NODE_ENV === 'development'
+      ? err.message ?? String(err)
+      : 'Invalid request body';
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

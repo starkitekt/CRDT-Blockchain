@@ -5,7 +5,9 @@
  * Keep in sync with `src/lib/store.ts` interfaces.
  */
 
+
 // ── GS1 / EPCIS ──────────────────────────────────────────────────────────────
+
 
 /** GS1 EPCIS 2.0 BizStep URN vocabulary */
 export type BizStep =
@@ -16,6 +18,7 @@ export type BizStep =
   | 'urn:epcglobal:cbv:bizstep:quality_control'
   | 'urn:epcglobal:cbv:bizstep:retail_selling';
 
+
 /** GS1 EPCIS 2.0 Disposition vocabulary */
 export type Disposition =
   | 'urn:epcglobal:cbv:disp:active'
@@ -23,6 +26,7 @@ export type Disposition =
   | 'urn:epcglobal:cbv:disp:conformant'
   | 'urn:epcglobal:cbv:disp:non_conformant'
   | 'urn:epcglobal:cbv:disp:recalled';
+
 
 /** Human-readable labels for EPCIS dispositions */
 export const DISPOSITION_LABELS: Record<Disposition, string> = {
@@ -33,7 +37,16 @@ export const DISPOSITION_LABELS: Record<Disposition, string> = {
   'urn:epcglobal:cbv:disp:recalled':        'Recalled',
 };
 
+
+// ── Recall tier (hoisted — referenced by Batch) ───────────────────────────────
+
+
+/** FSSAI/FDA recall classification tiers */
+export type RecallTier = 1 | 2 | 3;
+
+
 // ── Batch ─────────────────────────────────────────────────────────────────────
+
 
 /** Batch lifecycle states */
 export type BatchStatus =
@@ -44,30 +57,79 @@ export type BatchStatus =
   | 'dispatched'
   | 'recalled';
 
+
 /** GS1-format batch ID pattern: HT-YYYYMMDD-NNN */
 export type BatchId = `HT-${string}-${string}`;
 
-export interface Batch {
-  id: string;
-  farmerId: string;
-  farmerName: string;
-  floraType: string;
-  weightKg: number;
-  /** Field moisture reading (%) — Codex limit ≤20% */
-  moisturePct: number;
-  /** GPS latitude string */
-  latitude: string;
-  /** GPS longitude string */
-  longitude: string;
-  grade: 'A' | 'B';
-  harvestDate: string;       // ISO date string
-  status: BatchStatus;
-  /** On-chain transaction hash after blockchain write */
-  onChainTxHash?: string;
-  createdAt: string;         // ISO 8601
+
+/**
+ * Inline lab sub-document stored on the Batch MongoDB document.
+ * Populated by lab.service.ts when results are published.
+ * Distinct from the full LabResult collection document.
+ */
+export interface LabResultsSubdoc {
+  moisture?:    number;
+  hmf?:         number;
+  antibiotics?: number;   // antibioticPpb from lab form
+  pesticides?:  number;   // pesticideMgKg from lab form
+  passed?:      boolean;  // Codex Stan 12-1981 overall pass/fail
 }
 
+
+export interface Batch {
+  // ── Core identity ────────────────────────────────────────────────────────
+  id:           string;       // MongoDB _id (serialised)
+  batchId:      string;       // HT-YYYYMMDD-NNN display key
+  farmerId:     string;
+  farmerName:   string;
+  floraType:    string;
+  weightKg:     number;
+  /** Field moisture reading (%) — Codex limit ≤20% */
+  moisturePct:  number;
+  /** GPS latitude string */
+  latitude:     string;
+  /** GPS longitude string */
+  longitude:    string;
+  grade:        'A' | 'B';
+  harvestDate:  string;       // ISO date string
+  status:       BatchStatus;
+  createdAt:    string;       // ISO 8601
+  updatedAt?:   string;
+
+  // ── Warehouse ────────────────────────────────────────────────────────────
+  warehouseId?:          string;
+  warehouseReceivedAt?:  string;
+  warehouseNotes?:       string;
+
+  // ── Lab ──────────────────────────────────────────────────────────────────
+  labId?:          string;
+  labSubmittedAt?: string;
+  labReportId?:    string;
+  labCertifiedAt?: string;
+  /** Inline Codex pass/fail subdoc — NOT the full LabResult document */
+  labResults?:     LabResultsSubdoc;
+
+  // ── Dispatch ─────────────────────────────────────────────────────────────
+  dispatchedAt?:           string;
+  destinationEnterprise?:  string;
+  invoiceNo?:              string;
+
+  // ── Blockchain ───────────────────────────────────────────────────────────
+  onChainTxHash?:        string;
+  onChainDataHash?:      string;   // keccak256 of chain payload
+  blockchainAnchoredAt?: string;
+  blockchainNetwork?:    string;   // "localhost" | "polygon" | "base-sepolia"
+
+  // ── Recall ───────────────────────────────────────────────────────────────
+  recallReason?:      string;
+  recallTier?:        RecallTier;
+  recallInitiatedAt?: string;
+  recallTxHash?:      string;
+}
+
+
 // ── Lab Results ───────────────────────────────────────────────────────────────
+
 
 /** Codex Stan 12-1981 + FSSAI lab test results */
 export interface LabResult {
@@ -108,6 +170,7 @@ export interface LabResult {
   onChainTxHash?: string;
 }
 
+
 /** Codex Stan 12-1981 compliance limits (reference constants) */
 export const CODEX_LIMITS = {
   moisture:       { max: 20,  unit: '%',       label: 'Moisture' },
@@ -118,16 +181,16 @@ export const CODEX_LIMITS = {
   acidity:        { max: 50,  unit: 'meq/kg',  label: 'Free Acidity' },
 } as const;
 
+
 // ── Recall ────────────────────────────────────────────────────────────────────
 
-/** FSSAI/FDA recall classification tiers */
-export type RecallTier = 1 | 2 | 3;
 
 export const RECALL_TIER_LABELS: Record<RecallTier, { label: string; description: string; severity: 'error' | 'warning' | 'info' }> = {
-  1: { label: 'Class I',   description: 'Immediate health hazard — life threatening',    severity: 'error' },
+  1: { label: 'Class I',   description: 'Immediate health hazard — life threatening',       severity: 'error'   },
   2: { label: 'Class II',  description: 'Remote health hazard — temporary adverse effects', severity: 'warning' },
-  3: { label: 'Class III', description: 'No health hazard — label or packaging violation', severity: 'info' },
+  3: { label: 'Class III', description: 'No health hazard — label or packaging violation',  severity: 'info'    },
 };
+
 
 export interface RecallEvent {
   id: string;
@@ -140,9 +203,12 @@ export interface RecallEvent {
   onChainTxHash?: string;
 }
 
+
 // ── CTE / EPCIS Timeline ──────────────────────────────────────────────────────
 
+
 export type CTEStatus = 'completed' | 'active' | 'pending';
+
 
 /** Critical Tracking Event (FDA FSMA Rule 204 / GS1 EPCIS 2.0) */
 export interface CTEEvent {
@@ -160,7 +226,9 @@ export interface CTEEvent {
   txHash?: string;
 }
 
+
 // ── User / Auth ───────────────────────────────────────────────────────────────
+
 
 export type UserRole =
   | 'farmer'
@@ -171,6 +239,7 @@ export type UserRole =
   | 'consumer'
   | 'secretary'
   | 'admin';
+
 
 export interface User {
   id: string;
@@ -184,7 +253,9 @@ export interface User {
   createdAt?: string;        // ISO 8601 — optional; not required by in-memory store
 }
 
+
 // ── Wallet / Blockchain ───────────────────────────────────────────────────────
+
 
 export interface WalletState {
   address: string | null;
@@ -193,7 +264,9 @@ export interface WalletState {
   balance: string | null;
 }
 
+
 // ── GIS / Map ─────────────────────────────────────────────────────────────────
+
 
 export interface ProductionCluster {
   id: string;

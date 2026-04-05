@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
       .sort({ createdAt: -1 })
       .lean();
 
-    return NextResponse.json({ data: users });
+    return NextResponse.json(users);
 
   } catch (err) {
     if (err instanceof AuthError) return handleAuthError(err);

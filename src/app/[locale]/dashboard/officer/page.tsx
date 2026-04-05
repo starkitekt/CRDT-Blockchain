@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 import {
   Tile,
   Button,
@@ -32,6 +33,7 @@ import RecallManagementModal from '@/components/Traceability/RecallManagementMod
 import type { RecallTier } from '@/types';
 
 export default function OfficerDashboard() {
+  const currentUser = useCurrentUser();
   const tOnboarding = useTranslations('Onboarding.officer');
   const tDashboard = useTranslations('Dashboard.officer');
   const { isTourOpen, isKYCOpen, completeKYC, completeTour, closeTour } = useOnboarding({ role: 'officer', hasKYC: true });
@@ -86,7 +88,7 @@ export default function OfficerDashboard() {
           tier:        2 as RecallTier,
           reason:      'Officer flagged for field audit',
           affectedKg:  0,
-          initiatedBy: 'GOVT-OFC-04',
+          initiatedBy: currentUser.userId,
         });
         setFlaggedBatches(p => [...p, actionBatch]);
       }
@@ -277,7 +279,7 @@ export default function OfficerDashboard() {
             : `You are flagging batch ${actionBatch} for field audit. The batch will be held pending investigation.`}
         </p>
         <div className="p-spacing-md bg-slate-50 rounded-xl border border-slate-100 font-mono text-[11px] text-slate-600">
-          IMMUTABLE_PAYLOAD: {confirmAction?.toUpperCase()}_BATCH_{actionBatch} · OFFICER: GOVT-OFC-04 · {signTimestamp}
+          IMMUTABLE_PAYLOAD: {confirmAction?.toUpperCase()}_BATCH_{actionBatch} · OFFICER: \ · {signTimestamp}
         </div>
       </Modal>
 
@@ -304,7 +306,7 @@ export default function OfficerDashboard() {
               <div className="font-mono text-[10px] text-primary/80 leading-relaxed overflow-x-auto">
                 {`{
   "batch": "1204",
-  "verified_by": "GOVT-OFC-04",
+  "verified_by": "\${currentUser.userId}",
   "hash": "0x9df1...a2e8",
   "status": "APPROVED",
   "timestamp": "${signTimestamp}"
@@ -329,3 +331,4 @@ export default function OfficerDashboard() {
     </UnifiedDashboardLayout>
   );
 }
+

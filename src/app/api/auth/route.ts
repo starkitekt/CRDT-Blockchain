@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     // ── Success — reset rate limit counter for this IP ────────────────────
     resetRateLimit(ip);
 
-    const response = NextResponse.json({ success: true, role: confirmedRole });
+    const response = NextResponse.json({ success: true, role: confirmedRole, token });
     response.cookies.set('honeytrace_role', confirmedRole, cookieOpts);
     response.cookies.set('honeytrace_token', token, cookieOpts);
     return response;

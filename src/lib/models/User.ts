@@ -1,14 +1,11 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-
 export const VALID_ROLES = [
   'farmer', 'warehouse', 'lab', 'officer',
   'enterprise', 'consumer', 'secretary', 'admin'
 ] as const;
 
-
 export type UserRole = typeof VALID_ROLES[number];
-
 
 export interface IUser extends Document {
   email: string;
@@ -16,52 +13,47 @@ export interface IUser extends Document {
   role: UserRole;
   name: string;
   kycCompleted: boolean;
-
+  kycVerifiedAt?: Date;           // ← ADD: set when kycCompleted = true
+  kycRejected?: boolean;          // ← ADD
+  kycRejectReason?: string;       // ← ADD
+  isActive?: boolean;             // ← ADD
 
   // ── Shared across roles ───────────────────────────────────────────────────
-  fssaiLicense?: string;          // lab, warehouse, enterprise
-
+  fssaiLicense?: string;
 
   // ── Farmer ────────────────────────────────────────────────────────────────
-  aadhaarNumber?: string;         // 12-digit (raw input, not stored post-KYC)
-  pmKisanId?: string;         // PM-KISAN beneficiary ID
+  aadhaarNumber?: string;
+  pmKisanId?: string;
 
-
-  // ── Aadhaar e-KYC (populated after OTP verification) ─────────────────────
+  // ── Aadhaar e-KYC ─────────────────────────────────────────────────────────
   aadhaarVerified?: boolean;
-  aadhaarSuffix?: string;     // last 4 digits ONLY — never store full number
-  aadhaarKycName?: string;     // name from UIDAI response
-  aadhaarKycDob?: string;     // YYYY-MM-DD
+  aadhaarSuffix?: string;
+  aadhaarKycName?: string;
+  aadhaarKycDob?: string;
   aadhaarKycGender?: 'M' | 'F' | 'T';
-  aadhaarKycAddress?: string;     // full address from UIDAI
-
+  aadhaarKycAddress?: string;
 
   // ── Warehouse ─────────────────────────────────────────────────────────────
-  gstNumber?: string;          // 15-char GST
-  wdraLicenseNo?: string;         // WDRA warehouse license
-
+  gstNumber?: string;
+  wdraLicenseNo?: string;
 
   // ── Lab ───────────────────────────────────────────────────────────────────
-  nablAccreditationNo?: string;   // e.g. T-1234
-  labRegistrationNo?: string;   // State lab registration
-
+  nablAccreditationNo?: string;
+  labRegistrationNo?: string;
 
   // ── Officer / Secretary ───────────────────────────────────────────────────
-  employeeId?: string;       // Govt employee ID
-  fssaiOfficerId?: string;       // FSSAI officer ID
-  department?: string;       // e.g. FSSAI / AGMARK
-  jurisdiction?: string;       // e.g. "Uttar Pradesh - Meerut District"
-
+  employeeId?: string;
+  fssaiOfficerId?: string;
+  department?: string;
+  jurisdiction?: string;
 
   // ── Enterprise ────────────────────────────────────────────────────────────
-  cinNumber?: string;             // Company Identification Number
-  iecCode?: string;             // Import Export Code (optional)
-
+  cinNumber?: string;
+  iecCode?: string;
 
   // ── Consumer ──────────────────────────────────────────────────────────────
-  mobileNumber?: string;          // 10-digit Indian mobile
+  mobileNumber?: string;
 }
-
 
 const UserSchema = new Schema<IUser>(
   {
@@ -71,34 +63,34 @@ const UserSchema = new Schema<IUser>(
     name: { type: String, required: true },
     kycCompleted: { type: Boolean, default: false },
 
+    // ── KYC status fields ────────────────────────────────────────────────────
+    kycVerifiedAt: { type: Date },                        // ← ADD
+    kycRejected: { type: Boolean, default: false },     // ← ADD
+    kycRejectReason: { type: String, trim: true },          // ← ADD
+    isActive: { type: Boolean, default: true },      // ← ADD
 
     // ── Shared ───────────────────────────────────────────────────────────────
     fssaiLicense: { type: String, trim: true },
-
 
     // ── Farmer ───────────────────────────────────────────────────────────────
     aadhaarNumber: { type: String, trim: true },
     pmKisanId: { type: String, trim: true },
 
-
     // ── Aadhaar e-KYC ────────────────────────────────────────────────────────
     aadhaarVerified: { type: Boolean, default: false },
-    aadhaarSuffix: { type: String, trim: true },      // last 4 digits
+    aadhaarSuffix: { type: String, trim: true },
     aadhaarKycName: { type: String, trim: true },
-    aadhaarKycDob: { type: String, trim: true },      // YYYY-MM-DD
+    aadhaarKycDob: { type: String, trim: true },
     aadhaarKycGender: { type: String, enum: ['M', 'F', 'T'] },
     aadhaarKycAddress: { type: String, trim: true },
-
 
     // ── Warehouse ─────────────────────────────────────────────────────────────
     gstNumber: { type: String, trim: true, uppercase: true },
     wdraLicenseNo: { type: String, trim: true },
 
-
     // ── Lab ───────────────────────────────────────────────────────────────────
     nablAccreditationNo: { type: String, trim: true },
     labRegistrationNo: { type: String, trim: true },
-
 
     // ── Officer / Secretary ───────────────────────────────────────────────────
     employeeId: { type: String, trim: true },
@@ -106,18 +98,15 @@ const UserSchema = new Schema<IUser>(
     department: { type: String, trim: true },
     jurisdiction: { type: String, trim: true },
 
-
     // ── Enterprise ────────────────────────────────────────────────────────────
     cinNumber: { type: String, trim: true, uppercase: true },
     iecCode: { type: String, trim: true, uppercase: true },
-
 
     // ── Consumer ──────────────────────────────────────────────────────────────
     mobileNumber: { type: String, trim: true },
   },
   { timestamps: true }
 );
-
 
 export const User =
   mongoose.models.User || mongoose.model<IUser>('User', UserSchema);

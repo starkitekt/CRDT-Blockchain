@@ -1,0 +1,101 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/rbac';
+import { connectDB } from '@/lib/mongodb';
+import { User } from '@/lib/models/User';
+import { AuditLog } from '@/lib/models/AuditLog';
+import { z } from 'zod';
+
+const PatchUserSchema = z.object({
+  kycCompleted:     z.boolean().optional(),
+  kycRejected:      z.boolean().optional(),
+  kycRejectReason:  z.string().max(500).optional(),
+  role:             z.enum(['farmer','warehouse','lab','officer','enterprise','consumer','admin','secretary']).optional(),
+  isActive:         z.boolean().optional(),
+  fssaiLicense:     z.string().optional(),
+  gstin:            z.string().optional(),
+  labAccreditationId: z.string().optional(),
+}).strict();
+
+// GET /api/users/:id
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await requireAuth(req, ['admin', 'secretary']);
+  if (auth instanceof NextResponse) return auth;
+
+  const { id } = await params;
+  await connectDB();
+
+  const user = await User.findById(id).select('-passwordHash -__v').lean();
+  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+
+  return NextResponse.json(user);
+}
+
+// PATCH /api/users/:id
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await requireAuth(req, ['admin', 'secretary']);
+  if (auth instanceof NextResponse) return auth;
+
+  const { id } = await params;
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  const parsed = PatchUserSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'Validation failed', issues: parsed.error.issues },
+      { status: 422 }
+    );
+  }
+
+  await connectDB();
+
+  const user = await User.findById(id);
+  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+
+  const updates = parsed.data;
+
+  // Apply field updates
+  if (updates.kycCompleted !== undefined) {
+    user.kycCompleted   = updates.kycCompleted;
+    user.kycVerifiedAt  = updates.kycCompleted ? new Date() : undefined;
+    user.kycRejected    = updates.kycCompleted ? false : user.kycRejected;
+  }
+  if (updates.kycRejected !== undefined) {
+    user.kycRejected      = updates.kycRejected;
+    user.kycRejectReason  = updates.kycRejectReason ?? '';
+    user.kycCompleted     = updates.kycRejected ? false : user.kycCompleted;
+  }
+  if (updates.role       !== undefined) user.role       = updates.role;
+  if (updates.isActive   !== undefined) user.isActive   = updates.isActive;
+  if (updates.fssaiLicense       !== undefined) user.fssaiLicense       = updates.fssaiLicense;
+  if (updates.gstin              !== undefined) user.gstin              = updates.gstin;
+  if (updates.labAccreditationId !== undefined) user.labAccreditationId = updates.labAccreditationId;
+
+  await user.save();
+
+  // Audit log — non-blocking
+  AuditLog.create({
+    entityType:  'user',
+    entityId:    id,
+    action:      'user_updated',
+    actorUserId: (auth as { userId: string }).userId,
+    actorRole:   (auth as { role: string }).role,
+    metadata:    updates,
+  }).catch(() => {});
+
+  const { passwordHash: _, __v, ...clean } =
+    user.toObject() as Record<string, unknown>;
+
+  return NextResponse.json(clean);
+}
