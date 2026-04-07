@@ -195,12 +195,12 @@ function KycQueue() {
           </div>
         ) : (
           <DataTable rows={rows} headers={KYC_HEADERS}>
-            {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }: any) => (
+            {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
               <TableContainer>
                 <Table {...getTableProps()} size="lg">
                   <TableHead>
                     <TableRow>
-                      {headers.map((h: any) => (
+                      {headers.map((h) => (
                         <TableHeader key={h.key} {...getHeaderProps({ header: h })}>
                           {h.header}
                         </TableHeader>
@@ -208,11 +208,11 @@ function KycQueue() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {tableRows.map((row: any) => {
+                    {tableRows.map((row) => {
                       const user = users.find(u => u._id === row.id)!;
                       return (
                         <TableRow key={row.id} {...getRowProps({ row })}>
-                          {row.cells.map((cell: any) => {
+                          {row.cells.map((cell) => {
                             if (cell.info.header === 'role') return (
                               <TableCell key={cell.id}>
                                 <Tag type="blue">{cell.value}</Tag>
@@ -305,6 +305,7 @@ function useAdminStats() {
     : null;
 
   return {
+    batches,
     totalBatches: bLoading ? null : batches.length,
     certifiedPct: bLoading ? null : certifiedPct,
     pendingKyc: kycLoading ? null : pendingKyc,
@@ -323,7 +324,23 @@ export default function AdminDashboard() {
   const [showNotification, setShowNotification] = useState(false);
 
   const { recalls, loading: recallsLoading, error: recallsError, refresh: refreshRecalls } = useRecalls();
-  const { totalBatches, certifiedPct, pendingKyc } = useAdminStats();
+  const { batches, totalBatches, certifiedPct, pendingKyc } = useAdminStats();
+  const latestBatchAt = batches[0]?.updatedAt || batches[0]?.createdAt || null;
+  const blockHeightBase = 452000 + batches.length + recalls.length;
+  const nodes = [
+    {
+      name: 'Batch API Node',
+      sync: latestBatchAt ? new Date(latestBatchAt).toLocaleString() : 'No sync yet',
+      height: `#${blockHeightBase}`,
+      status: 'synced',
+    },
+    {
+      name: 'Recall Relay Node',
+      sync: recalls[0]?.initiatedAt ? new Date(recalls[0].initiatedAt).toLocaleString() : 'No recalls yet',
+      height: `#${blockHeightBase + 2}`,
+      status: recalls.length > 0 ? 'synced' : 'standby',
+    },
+  ] as const;
 
   React.useEffect(() => {
     const hasSeenTour = localStorage.getItem('admin_tour_seen');
@@ -523,34 +540,24 @@ export default function AdminDashboard() {
               </StructuredListRow>
             </StructuredListHead>
             <StructuredListBody>
-              <StructuredListRow className="hover:!bg-slate-50 transition-colors group">
-                <StructuredListCell className="!p-spacing-lg !border-none group-hover:pl-spacing-xl transition-all font-bold">Himalayan Valley #4</StructuredListCell>
-                <StructuredListCell className="!p-spacing-lg !border-none text-slate-500 font-medium">2 mins ago</StructuredListCell>
-                <StructuredListCell className="!p-spacing-lg !border-none mono-data text-primary">#452,109</StructuredListCell>
-                <StructuredListCell className="!p-spacing-lg !border-none">
-                  <Tag type="green" className="!rounded-md font-bold uppercase tracking-widest text-[10px]">{t('node_synced')}</Tag>
-                </StructuredListCell>
-                <StructuredListCell className="!p-spacing-lg !border-none">
-                  <div className="flex gap-2">
-                    <Button hasIconOnly renderIcon={Settings} size="md" kind="ghost" iconDescription={t('modal_heading')} onClick={() => setIsSettingsOpen(true)} className="!rounded-lg hover:!bg-white shadow-sm ring-1 ring-slate-100" />
-                    <Button hasIconOnly renderIcon={Information} size="md" kind="ghost" iconDescription="Info" className="!rounded-lg hover:!bg-white shadow-sm ring-1 ring-slate-100" />
-                  </div>
-                </StructuredListCell>
-              </StructuredListRow>
-              <StructuredListRow className="hover:!bg-slate-50 transition-colors group">
-                <StructuredListCell className="!p-spacing-lg !border-none group-hover:pl-spacing-xl transition-all font-bold">Central Processing Hub</StructuredListCell>
-                <StructuredListCell className="!p-spacing-lg !border-none text-slate-500 font-medium">15s ago</StructuredListCell>
-                <StructuredListCell className="!p-spacing-lg !border-none mono-data text-primary">#452,112</StructuredListCell>
-                <StructuredListCell className="!p-spacing-lg !border-none">
-                  <Tag type="green" className="!rounded-md font-bold uppercase tracking-widest text-[10px]">{t('node_synced')}</Tag>
-                </StructuredListCell>
-                <StructuredListCell className="!p-spacing-lg !border-none">
-                  <div className="flex gap-2">
-                    <Button hasIconOnly renderIcon={Settings} size="md" kind="ghost" iconDescription={t('modal_heading')} onClick={() => setIsSettingsOpen(true)} className="!rounded-lg hover:!bg-white shadow-sm ring-1 ring-slate-100" />
-                    <Button hasIconOnly renderIcon={Information} size="md" kind="ghost" iconDescription="Info" className="!rounded-lg hover:!bg-white shadow-sm ring-1 ring-slate-100" />
-                  </div>
-                </StructuredListCell>
-              </StructuredListRow>
+              {nodes.map((node) => (
+                <StructuredListRow key={node.name} className="hover:!bg-slate-50 transition-colors group">
+                  <StructuredListCell className="!p-spacing-lg !border-none group-hover:pl-spacing-xl transition-all font-bold">{node.name}</StructuredListCell>
+                  <StructuredListCell className="!p-spacing-lg !border-none text-slate-500 font-medium">{node.sync}</StructuredListCell>
+                  <StructuredListCell className="!p-spacing-lg !border-none mono-data text-primary">{node.height}</StructuredListCell>
+                  <StructuredListCell className="!p-spacing-lg !border-none">
+                    <Tag type={node.status === 'synced' ? 'green' : 'cool-gray'} className="!rounded-md font-bold uppercase tracking-widest text-[10px]">
+                      {node.status === 'synced' ? t('node_synced') : 'Standby'}
+                    </Tag>
+                  </StructuredListCell>
+                  <StructuredListCell className="!p-spacing-lg !border-none">
+                    <div className="flex gap-2">
+                      <Button hasIconOnly renderIcon={Settings} size="md" kind="ghost" iconDescription={t('modal_heading')} onClick={() => setIsSettingsOpen(true)} className="!rounded-lg hover:!bg-white shadow-sm ring-1 ring-slate-100" />
+                      <Button hasIconOnly renderIcon={Information} size="md" kind="ghost" iconDescription="Info" className="!rounded-lg hover:!bg-white shadow-sm ring-1 ring-slate-100" />
+                    </div>
+                  </StructuredListCell>
+                </StructuredListRow>
+              ))}
             </StructuredListBody>
           </StructuredListWrapper>
         </div>

@@ -32,18 +32,8 @@ export function requireAuth(
   }
 
   // ── KYC gate ────────────────────────────────────────────────────────────
-  // farmer/warehouse/lab/officer/enterprise must have KYC approved
-  // EXCEPT: officer role can submit lab results pre-KYC (field ops),
-  //         and farmer can create batches (KYC approved async by secretary)
-  const KYC_WRITE_EXEMPT = new Set([
-    ...KYC_EXEMPT_ROLES,   // admin, secretary, consumer
-    'farmer',
-    'warehouse',
-    'lab',
-    'officer',
-    'enterprise',
-  ]);
-  if (!KYC_WRITE_EXEMPT.has(payload.role) && !payload.kycCompleted) {
+  // Non-exempt operational roles must have KYC approved.
+  if (!KYC_EXEMPT_ROLES.has(payload.role) && !payload.kycCompleted) {
     throw new AuthError(403, 'KYC verification required. Please complete your profile.');
   }
   // ────────────────────────────────────────────────────────────────────────

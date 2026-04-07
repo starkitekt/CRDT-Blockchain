@@ -36,14 +36,49 @@ export default function IdentityVerificationModal({
   const tCommon = useTranslations('common');
   const [loading, setLoading] = useState(false);
   const [docId, setDocId] = useState('');
+  const [otp, setOtp] = useState('');
+  const [txnId, setTxnId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    setError(null);
+    setStatusMessage(null);
     if (!docId) return;
     setLoading(true);
-    setTimeout(() => {
+    try {
+      if (role === 'farmer') {
+        if (!txnId) {
+          const res = await fetch('/api/kyc/aadhaar/initiate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ aadhaarNumber: docId.replace(/\s/g, '') }),
+          });
+          const body = await res.json() as { error?: string; txnId?: string; message?: string };
+          if (!res.ok || !body.txnId) {
+            throw new Error(body.error || 'Failed to initiate Aadhaar OTP.');
+          }
+          setTxnId(body.txnId);
+          setStatusMessage(body.message || 'OTP sent to Aadhaar-linked mobile.');
+          return;
+        }
+
+        const verifyRes = await fetch('/api/kyc/aadhaar/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ txnId, otp }),
+        });
+        const verifyBody = await verifyRes.json() as { error?: string; message?: string };
+        if (!verifyRes.ok) {
+          throw new Error(verifyBody.error || 'OTP verification failed.');
+        }
+      }
       setLoading(false);
       onCompleteAction();
-    }, 2000);
+    } catch (e) {
+      setLoading(false);
+      setError(e instanceof Error ? e.message : 'Verification failed.');
+    }
   };
 
   const getRoleConfig = () => {
@@ -83,11 +118,11 @@ export default function IdentityVerificationModal({
       <Modal
         open={isOpen}
         modalHeading={config.title}
-        primaryButtonText={loading ? tDashboard('verifying_loading') : tDashboard('submit_docs')}
+        primaryButtonText={loading ? tDashboard('verifying_loading') : role === 'farmer' && txnId ? 'Verify OTP' : tDashboard('submit_docs')}
         secondaryButtonText={tCommon('logout')}
         onRequestClose={() => {}}
         onRequestSubmit={handleSubmit}
-        primaryButtonDisabled={loading || !docId}
+        primaryButtonDisabled={loading || (role === 'farmer' ? (!docId || (txnId !== null && otp.length !== 6)) : !docId)}
         preventCloseOnClickOutside
       >
         <Stack gap={6}>
@@ -115,6 +150,26 @@ export default function IdentityVerificationModal({
             onChange={(e) => setDocId(e.target.value)}
             required
           />
+
+          {role === 'farmer' && txnId && (
+            <TextInput
+              id="aadhaar-otp-input"
+              labelText="OTP"
+              placeholder="Enter 6-digit OTP"
+              size="lg"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              required
+            />
+          )}
+
+          {statusMessage && (
+            <InlineNotification kind="success" title="OTP initiated" subtitle={statusMessage} lowContrast />
+          )}
+
+          {error && (
+            <InlineNotification kind="error" title="Verification failed" subtitle={error} lowContrast />
+          )}
 
           <FileUploader
             labelTitle={tDashboard('attach_proof')}

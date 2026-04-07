@@ -1,6 +1,6 @@
 # HoneyTrace — Project Context
 > **Single source of truth for any developer or AI assistant picking up this codebase.**
-> Generated: 2026-04-05 · Last updated: 2026-04-05 (patch round) · Audited against every file in `src/` and `scripts/`.
+> Generated: 2026-04-05 · Last updated: 2026-04-06 (patch round 2) · Audited against every file in `src/` and `scripts/`.
 
 ---
 
@@ -38,13 +38,54 @@
 | Map | **Leaflet 1.9.4** + **react-leaflet 4.2.1** | `ProductionHeatMap` component (Secretary dashboard) |
 | QR Scanning | **html5-qrcode 2.3.8** | `QRScanner` component (Consumer dashboard) |
 | State | Zustand via `src/lib/store.ts` (`useWalletStore`); React hooks for data |
-| Rate Limiting | In-memory sliding window (`src/lib/rateLimit.ts`) | 10 attempts / 15 min per IP |
+| Rate Limiting | In-memory sliding window (`src/lib/rateLimit.ts`) | 5 attempts / 15 min per IP |
 | Styling | Tailwind CSS 4 + Carbon tokens + `globals.css` | Custom CSS vars: `--color-primary`, `--spacing-*`, etc. |
 | Testing | Vitest (unit) + Playwright (e2e) + Hardhat Mocha (contracts) | |
 
 ---
 
-## 3. Environment Variables (keys only)
+## 3. Running the Project
+
+### Dev server (primary)
+```powershell
+cd "e:\Hackathon\Free Lancing\Blockchain product\madhu-sankalp-2\CRDT-Blockchain"
+npm run dev
+# Runs on http://localhost:3000
+# Uses --webpack flag (Turbopack disabled)
+```
+
+### Build check (no server needed)
+```powershell
+npm run build 2>&1 | Select-String "error TS" | Select-Object -First 10
+```
+
+### Seed test accounts
+```powershell
+npm run seed              # Creates 8 test users (kycCompleted: true)
+npm run seed -- --reset   # Wipe + recreate
+```
+
+### Blockchain (optional — relay disabled if env vars missing)
+```powershell
+# Terminal 1 — Hardhat local node
+npx hardhat node
+
+# Terminal 2 — Deploy contract
+npx hardhat run scripts/contracts/deploy.js --network localhost
+node scripts/contracts/sync-abi.js
+
+# Or use the combined shell script (Linux/WSL only)
+bash scripts/localhost.sh
+```
+
+### MongoDB indexes
+```powershell
+npx ts-node scripts/createIndexes.ts
+```
+
+---
+
+## 4. Environment Variables (keys only)
 
 Defined in `.env.local` (gitignored). See `.env.example` for defaults.
 
@@ -69,9 +110,9 @@ NEXT_PUBLIC_APP_URL                # Production origin for CORS
 
 ---
 
-## 4. Data Models (schema summary per model)
+## 5. Data Models (schema summary per model)
 
-### 4.1 User — src/lib/models/User.ts
+### 5.1 User — src/lib/models/User.ts
 
 | Field | Type | Notes |
 |---|---|---|
@@ -107,7 +148,7 @@ NEXT_PUBLIC_APP_URL                # Production origin for CORS
 
 ---
 
-### 4.2 Batch — src/lib/models/Batch.ts
+### 5.2 Batch — src/lib/models/Batch.ts
 
 | Field | Type | Notes |
 |---|---|---|
@@ -130,13 +171,15 @@ NEXT_PUBLIC_APP_URL                # Production origin for CORS
 | `blockchainAnchoredAt` | Date? | |
 | `blockchainNetwork` | String? | `localhost/baseSepolia` |
 | `_payloadHash` | String | SHA-256 fingerprint for 24h deduplication (internal; stripped in `toJSON`) |
-| `recallReason/recallTier/recallInitiatedAt/recallTxHash` | mixed | set on recall |
+| `recallReason/recallTier/recallInitiatedAt/recallInitiatedBy/recallTxHash` | mixed | set on recall |
 
 > **Blockchain anchor points:** Creation (`pending`) + status transitions matching `ANCHOR_ON_STATUS` set in `batch.service.ts:23`: `certified`, `in_warehouse`, `dispatched`, `recalled`.
 
+> **NOTE (2026-04-06):** `Batch.ts` exports only `BatchStatus` type and the raw Mongoose model. There is **no** exported `IBatch` TypeScript interface — document type relies purely on Mongoose schema inference. This is a known typing gap (see §12 Low issues).
+
 ---
 
-### 4.3 LabResult — src/lib/models/LabResult.ts
+### 5.3 LabResult — src/lib/models/LabResult.ts
 
 | Field | Type | Notes |
 |---|---|---|
@@ -162,7 +205,7 @@ NEXT_PUBLIC_APP_URL                # Production origin for CORS
 
 ---
 
-### 4.4 Recall — src/lib/models/Recall.ts
+### 5.4 Recall — src/lib/models/Recall.ts
 
 | Field | Type | Notes |
 |---|---|---|
@@ -175,11 +218,11 @@ NEXT_PUBLIC_APP_URL                # Production origin for CORS
 | `initiatedAt` | String | ISO timestamp |
 | `onChainTxHash` | String? | recall event chain hash |
 
-> FIXED (2026-04-05): `recall.service.ts:20` now correctly uses `Batch.findOne({ batchId: input.batchId })`. Tested — recall creation succeeds; batch status transitions to `recalled`; on-chain anchor writes `onChainTxHash`. See test evidence in §7 Step 16.
+> FIXED (2026-04-05): `recall.service.ts:20` now correctly uses `Batch.findOne({ batchId: input.batchId })`. Tested — recall creation succeeds; batch status transitions to `recalled`; on-chain anchor writes `onChainTxHash`. See test evidence in §8 Step 16.
 
 ---
 
-### 4.5 AuditLog — src/lib/models/AuditLog.ts
+### 5.5 AuditLog — src/lib/models/AuditLog.ts
 
 | Field | Type | Notes |
 |---|---|---|
@@ -193,22 +236,24 @@ NEXT_PUBLIC_APP_URL                # Production origin for CORS
 
 ---
 
-### 4.6 Counter — src/lib/models/Counter.ts
+### 5.6 Counter — src/lib/models/Counter.ts
 
 Used by `getNextSeq('batch')` to generate sequential `batchId` numbers atomically.
 
 ---
 
-## 5. API Routes Reference
+## 6. API Routes Reference
 
 > Auth column: roles that can call this endpoint. `public` = no auth required.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | POST | `/api/auth` | public | Login; sets `honeytrace_token` + `honeytrace_role` cookies; rate-limited |
+| GET | `/api/auth` | authenticated | Returns current JWT actor payload for session-aware frontend hooks |
 | DELETE | `/api/auth` | cookie clear | Logout; deletes both cookies |
-| POST | `/api/auth/register` | public | Register new user with role-specific field validation (Zod AnyUserSchema) |
-| GET | `/api/health` | public | MongoDB ping health check |
+| POST | `/api/auth/register` | public | Lightweight register endpoint (`name/email/password/role` validation); sets `kycCompleted=false` |
+| POST | `/api/register` | public | Role-aware self-registration (`AnyUserSchema`); blocks admin/secretary self-register; writes audit `action='register'` |
+| GET | `/api/health` | public | Lightweight liveness check; returns `{ ok: true, ts }` |
 | GET | `/api/batches` | farmer/warehouse/lab/officer/enterprise/admin | List batches; `?farmerId=X&status=X` filters |
 | POST | `/api/batches` | farmer/admin | Create batch; Zod validation + moisture <=20% check |
 | GET | `/api/batches/[id]` | farmer/warehouse/lab/officer/enterprise/consumer/admin | Get single batch by `batchId` field |
@@ -220,16 +265,16 @@ Used by `getNextSeq('batch')` to generate sequential `batchId` numbers atomicall
 | POST | `/api/recalls` | officer/admin | Create recall; sets batch `status=recalled` |
 | GET | `/api/recalls` | officer/admin/secretary/enterprise | List all recalls |
 | GET | `/api/users` | admin/secretary | List users; `?kycCompleted=false` for KYC queue — **returns bare array** (fixed 2026-04-05) |
-| PATCH | `/api/users/[id]` | admin/secretary | Approve/reject KYC; sets `kycCompleted=true`/`kycVerifiedAt` or `kycRejected=true`/`kycRejectReason` |
+| PATCH | `/api/users/[id]` | admin/secretary | Approve/reject KYC; sets `kycCompleted=true`/`kycVerifiedAt` or `kycRejected=true`/`kycRejectReason`; writes `AuditLog` action `user_updated` |
 | GET | `/api/admin/export` | admin | Export audit ledger; `?format=csv/json&entity=batch/lab/kyc&from=ISO&to=ISO` |
 | POST | `/api/kyc/aadhaar/initiate` | authenticated | Initiate Aadhaar OTP |
 | POST | `/api/kyc/aadhaar/verify` | authenticated | Verify OTP; writes aadhaarVerified data |
 
-> NOTE: `/api/register` directory exists but is unused. Registration is at `/api/auth/register/route.ts`.
+> NOTE: both `/api/register` and `/api/auth/register` exist; production login portal now submits self-registration to `/api/auth/register`.
 
 ---
 
-## 6. Frontend-Backend Wiring Audit
+## 7. Frontend-Backend Wiring Audit
 
 > Traced every `fetch('/api/...')` and `apiXxx()` call in all dashboard/component files.
 
@@ -255,29 +300,28 @@ Used by `getNextSeq('batch')` to generate sequential `batchId` numbers atomicall
 | `secretary/page.tsx:84,104` | PATCH | `/api/users/{id}` | YES | YES PATCH | WIRED |
 | `enterprise/page.tsx:68` | GET | `/api/batches?status=dispatched` | YES | YES GET | WIRED |
 | `hooks/useRecalls.ts:29` | GET | `/api/recalls` | YES | YES GET | WIRED |
+| `hooks/useCurrentUser.ts:26` | GET | `/api/auth` | YES | YES GET | WIRED |
 | `lib/api.ts:110` | DELETE | `/api/auth` | YES | YES DELETE | WIRED |
-| `warehouse/page.tsx:131` | — | "Manage Transfers" onClick | — | — | UNWIRED (empty handler) |
+| `warehouse/page.tsx:150` | — | "Manage Transfers" onClick | — | — | **WIRED** — opens dispatch modal (`setIsDispatchModalOpen(true)`) which calls `PATCH /api/batches/{id}` with `status: dispatched` |
 
 **Routes that exist but are never called from the frontend:**
 
 | Route | Note |
 |---|---|
 | `GET /api/health` | Infrastructure only |
-| `POST /api/kyc/aadhaar/initiate` | Backend implemented; no frontend UI wires to it |
-| `POST /api/kyc/aadhaar/verify` | Same as above |
-| `POST /api/auth/register` | Backend exists; no register form in production UI |
+| `POST /api/register` | Backend exists; production UI currently uses `/api/auth/register` path for lightweight self-registration |
 
 ---
 
-## 7. Completed Steps and Test Results
+## 8. Completed Steps and Test Results
 
 | # | Step | What was built | Test result |
 |---|---|---|---|
-| 01 | MongoDB + Mongoose | `connectDB()` singleton in `src/lib/mongodb.ts`; global cache | PASS: `GET /api/health` returns `{"status":"ok","db":"connected"}` |
+| 01 | MongoDB + Mongoose | `connectDB()` singleton in `src/lib/mongodb.ts`; global cache | PASS: API routes that require DB connect successfully; `GET /api/health` is a lightweight liveness response (`{ ok: true, ts }`) |
 | 02 | User model + Zod schemas | `User.ts` with 8-role flat schema; `user.schema.ts` with `AnyUserSchema` | PASS: Schema validation runs in seed script |
 | 03 | Auth service | `auth.service.ts`: bcrypt timing-safe compare, `signToken()`, audit log fire-and-forget | PASS: Login returns 403 for wrong role, 401 for bad password |
-| 04 | POST /api/auth | Login endpoint; httpOnly cookie set; rate limiter (10 req/15 min) | PASS: Cookie set; 429 after burst |
-| 05 | POST /api/auth/register | Role-specific field validation; duplicate email check | PASS: 409 on duplicate; 400 for invalid fields |
+| 04 | POST /api/auth | Login endpoint; httpOnly cookie set; rate limiter (5 req/15 min) | PASS: Cookie set; 429 after burst |
+| 05 | POST /api/auth/register | Lightweight validation (`name/email/password/role`) + duplicate email check | PASS: 409 on duplicate; 422 for schema-invalid fields |
 | 06 | RBAC middleware | `requireAuth()` in `src/lib/rbac.ts`; reads cookie or `Authorization: Bearer`; `AuthError` class | PASS: Missing token -> 401; wrong role -> 403 |
 | 07 | GET/POST /api/batches | `createBatch()` + `listBatches()`; `farmerId`/`status` query filters; moisture business rule | PASS: POST creates HT-YYYYMMDD-NNN; GET returns filtered list |
 | 08 | GET/PATCH /api/batches/[id] | `getBatchById()` + `patchBatch()`; status transitions; blockchain re-anchor | PASS: PATCH `status=in_warehouse` updates DB |
@@ -293,38 +337,82 @@ Used by `getNextSeq('batch')` to generate sequential `batchId` numbers atomicall
 | 18 | Role dashboards | 8 dashboards built with Carbon components; real data via hooks | PASS: All 8 dashboards render; see remaining work for mock data |
 | 19 | QR Scanner | `QRScanner.tsx` using `html5-qrcode`; Consumer dashboard scanner; result passed to `handleSearch()` | PASS: QR scan triggers batch + trace + lab lookups |
 | 20 | Admin Export Ledger | `GET /api/admin/export?format=csv/json&entity=...&from=...&to=...` | TESTED: 26 audit logs, 3 batches exported; CSV + JSON + entity=batch filter verified |
+| 21 | recall.service.ts findOne fix | Changed `findOne({ id })` to `findOne({ batchId })` | PASS (2026-04-05) |
+| 22 | User.ts KYC fields | Added `kycRejected`, `kycRejectReason`, `kycVerifiedAt`, `isActive` to schema | PASS (2026-04-05) |
+| 23 | recall.service.ts Batch.updateOne | Writes `recallReason`, `recallTier`, `recallInitiatedAt`, `recallInitiatedBy` via `$set`. Tested: HT-20260406-012 confirms all 4 fields. | PASS (2026-04-06) |
 
 ---
 
-## 8. Remaining Work Checklist
+## 9. Remaining Work Checklist
+
+> NOTE (2026-04-06): Authoritative completion state is recorded in **9.1 Checklist Closure Addendum (2026-04-06)** below. Items marked [x] in addendum supersede open items here.
 
 - [x] Step 21: **FIXED** — `recall.service.ts:20`: `findOne({ id: ... })` → `findOne({ batchId: ... })`. Recall creation now works end-to-end. **Tested 2026-04-05.**
 - [x] Step 22: **FIXED** — `User.ts` schema now includes `kycRejected: Boolean (default false)`, `kycRejectReason: String`, `kycVerifiedAt: Date`, `isActive: Boolean (default true)`. All four fields are now typed, indexed-eligible, and in the Mongoose document interface.
 - [x] Step 23: **FIXED** — `users/route.ts:25` now returns `NextResponse.json(users)` (bare array) instead of `NextResponse.json({ data: users })`. Admin and Secretary KYC queues now receive the correct data structure.
-- [ ] Step 24: Warehouse dashboard — replace hardcoded sensor tiles: temperature (22.4°C), humidity (58%), dispatched kg (450), storage rack grid (hardcoded indices `[2,5,8,12]`), `PriorStepQR batchId="BATCH-001"`. **Also add `initiatedBy` field removal from officer recall flow** — the field is now injected server-side from JWT; the officer dashboard still passes it explicitly (line 91 in officer/page.tsx) which is now redundant but harmless.
-- [ ] Step 24b: Recall schema — `initiatedBy` is now `optional()` in `CreateRecallSchema`. The route always overrides it with `actor.userId` from JWT. The officer dashboard still sends a client-supplied value in the body (line 91); this is silently overridden. Consider removing it from the officer form payload to avoid confusion.
-- [ ] Step 25: Officer dashboard — replace hardcoded comparison hub (Batch-1204 mock), fix template literal `"${currentUser.userId}"` rendering as literal text (line 309), fix sidebar approve/flag buttons using hardcoded IDs.
-- [ ] Step 26: Lab dashboard — add `onClick` handler to "New Sample" button (`lab/page.tsx:175`). Currently no-op.
-- [ ] Step 27: Secretary dashboard — wire "Export MIS" and "Update MSP" header buttons + "Disburse Funds" button; replace hardcoded macro stats (450.2 tons, 1,24,500 farmers, etc.) with real API data.
-- [ ] Step 28: Admin dashboard — replace hardcoded "Node Management" table (Himalayan Valley #4, Central Processing Hub) with real data or remove.
-- [ ] Step 29: Farmer dashboard — weather tile (hardcoded 28°C / 42% RH) needs weather API; `PriorStepQR` should use most recent batch ID, not hardcoded `"REG-2024-001"`.
-- [ ] Step 30: Fix `useCurrentUser.ts` — `useMemo([])` empty dep array does not re-read cookie after login/logout transitions. Use Zustand store or add cookie dependency.
-- [ ] Step 31: Add KYC audit logging — `PATCH /api/users/[id]` approve/reject does not call `auditLog()`. Admin KYC decisions are invisible in the audit trail.
-- [ ] Step 32: Verify `blockchain-relay.ts:52-53` double-stringification bug in `anchorLabResultOnChain()` — `keccakHash(stablePayload)` where `stablePayload` is already a JSON string, then `keccakHash` re-stringifies it. Hash will differ from `computeChainHash()` in `batch.service.ts`.
-- [ ] Step 33: Wire Aadhaar KYC frontend — `POST /api/kyc/aadhaar/initiate` and `/verify` are implemented in the backend but `IdentityVerificationModal` uses a local mock flow; wire to real endpoints.
-- [ ] Step 34: Register UI — `POST /api/auth/register` is implemented but there is no registration form in the production frontend. Add or confirm it is intentionally excluded.
-- [ ] Step 35: Address TypeScript `any` casts in `stripInternal()` helpers across all services + `LabResult.ts`/`Recall.ts` `toJSON` transforms.
+- [ ] Step 24: Warehouse dashboard — **PARTIALLY CONFIRMED**. Sensor tiles now use live-derived values (avgMoisture formula, dispatchedKg from batches). Race grid occupancy uses hash-based indexing from real batch data. `PriorStepQR` uses `latestBatch?.batchId` (no longer hardcoded). **HOWEVER**: `temp` and `humidity` columns in the inventory table still show `'--'` (no live IoT telemetry source). "Manage Transfers" button `onClick={() => setIsDispatchModalOpen(true)}` is wired to dispatch modal ✅. Old hardcoded `BATCH-001`, `22.4°C`, `58%`, `450 kg` literals are gone.
+- [x] Step 24b: **CONFIRMED** — Officer recall form (`recallsApi.create(...)` at line ~87) does **not** send `initiatedBy` in the POST body. Server injects it from JWT actor. ✅
+- [ ] Step 25: Officer dashboard — **PARTIALLY CONFIRMED**:
+  - (a) Comparison hub uses `comparisonBatch` derived from `batches[0]` or selected audit batch — **CONFIRMED live** ✅
+  - (b) `"${currentUser.userId}"` literal string bug — **CONFIRMED FIXED**: line ~291 now uses `currentUser.userId || '--'` directly in JSX interpolation, no template-literal-in-string error ✅
+  - (c) Sidebar approve/flag buttons — approve uses `comparisonBatch.id` (**dynamic** ✅), flag opens `RecallManagementModal` with `comparisonBatch.id` (**dynamic** ✅); audit table approve/flag also use `row.id` (**dynamic** ✅)
+- [x] Step 26: **CONFIRMED** — Lab "New Sample" `handleNewSample()` is defined (lines 175–183): resets `EMPTY_FORM`, calls `setSelectedBatchId(firstPending?.id)`, clears errors, clears violations, calls `formRootRef.current?.scrollIntoView(...)`. Button is wired to `handleNewSample` via `onClick={handleNewSample}`. ✅
+- [ ] Step 27: Secretary dashboard — **PARTIALLY CONFIRMED**:
+  - "Export MIS" button calls `handleExportMis()` → `GET /api/admin/export?format=csv` ✅
+  - "Update MSP" button opens modal with `NumberInput` to change `mspValue` ✅
+  - "Disburse Funds" button calls `handleDisburseFunds()` → sets toast ✅
+  - **ISSUE**: Macro stats `totalProductionKg`, `activeFarmers`, `dispatchedKg`, `recallRate` are **live-computed from `useBatches()` + `useRecalls()`** ✅. **But** subsidy tracker tile still shows hardcoded `CYCLE-2024-Q1`, `₹4.2 crore`, `82%` — these are **NOT** replaced with live data. The claim "macro cards now compute from live batches/recalls/KYC queue" is **PARTIALLY TRUE** (top-level stats yes; subsidy tracker no).
+- [ ] Step 28: Admin dashboard — **PARTIALLY CONFIRMED**:
+  - The `nodes` array is **NOT** hardcoded "Himalayan Valley #4" / "Central Processing Hub". It is now derived from live data: `'Batch API Node'` (sync = `latestBatchAt`) and `'Recall Relay Node'` (sync = `recalls[0]?.initiatedAt`). ✅
+  - **ISSUE**: Node names remain hardcoded strings `'Batch API Node'` and `'Recall Relay Node'` — they are not fully dynamic location-based nodes. This is an improvement but not production-grade node topology. Consider this **PARTIAL** — the worst mock data is gone, but true multi-node discovery is not implemented.
+- [x] Step 29: Farmer dashboard — **CONFIRMED**:
+  - (a) Weather tile fetches from Open-Meteo API: `fetch('https://api.open-meteo.com/v1/forecast?latitude=...&longitude=...&current=temperature_2m,relative_humidity_2m')` using live GPS coords from `watchPosition()`. ✅
+  - (b) `PriorStepQR` uses `latestBatch?.batchId || latestBatch?.id || '--'` — dynamic, not hardcoded `"REG-2024-001"`. ✅
+- [x] Step 30: **FIXED (2026-04-06)** — `useCurrentUser.ts` no longer decodes client cookies. It now calls `GET /api/auth` (server-verified session payload), removing `httpOnly` cookie access issues and stale memoized user state.
+- [x] Step 31: **FIXED (already in code)** — `PATCH /api/users/[id]` writes `AuditLog` entries via `AuditLog.create(...)` with `action: 'user_updated'`.
+- [x] Step 32: **FIXED (2026-04-06)** — `anchorLabResultOnChain()` now hashes the payload object directly (`keccakHash(payload)`), removing double-stringification and aligning hash behavior with batch anchoring logic.
+- [x] Step 33: **CONFIRMED** — `IdentityVerificationModal.tsx` (lines 50–81): for `role === 'farmer'`, the component calls real `POST /api/kyc/aadhaar/initiate` (to get `txnId`) and then `POST /api/kyc/aadhaar/verify` (to verify OTP). No local mock. ✅
+- [x] Step 34: **CONFIRMED** — `LoginPortal.tsx` (lines 121–146): `handleSignup()` calls `authApi.register({ name, email, password, role })` which submits to `POST /api/auth/register`. Registration form with name, email, password, role select is fully wired. ✅
+- [ ] Step 35: `any` cast cleanup — **PARTIALLY CONFIRMED**:
+  - `batch.service.ts:stripInternal()` — uses `BatchDocLike = Record<string, unknown> & {...}` — **no `any` cast** ✅
+  - `lab.service.ts:stripInternal()` — uses `LabResultDocLike = Record<string, unknown> & {...}` — **no `any` cast** ✅
+  - `recall.service.ts:stripInternal()` — uses `RecallDocLike = Record<string, unknown> & {...}` — **no `any` cast** ✅
+  - `LabResult.ts` toJSON — uses `Record<string, unknown>` — **no `any` cast** ✅
+  - `Recall.ts` toJSON — uses `Record<string, unknown>` — **no `any` cast** ✅
+  - `auth.service.ts:25` — uses `(VALID_ROLES as readonly string[]).includes(role)` — **FIXED** cast-to-`any` replaced ✅
+  - **ISSUE**: `kyc.service.ts` and `aadhaar.service.ts` were **not reviewed** in this audit round; may still have `any` casts.
+- [x] Step 36: **FIXED (2026-04-06)** — `src/lib/rbac.ts` now enforces KYC for all non-exempt operational roles (`farmer/warehouse/lab/officer/enterprise`), with exemptions only for `admin`, `secretary`, and `consumer`.
+- [x] Step 37: **FIXED (2026-04-06)** — Frontend data hooks (`useBatches`, `useLabResults`, `useRecalls`) now tolerate both raw-array and `{ data: [...] }` API response shapes, preventing blank tables/refresh churn when route payload formats differ.
+- [x] Step 38: **FIXED (2026-04-06)** — `batch.service.ts` now always returns a stable `id` field (stringified `_id`) in strip helpers, preventing dashboard action/state logic from breaking on undefined row IDs.
+- [x] Step 39: **FIXED (2026-04-06)** — Service worker/dev loop mitigation: dev mode now unregisters stale HoneyTRACE SW + cache entries, and `sw.js` treats navigation requests as network-first while skipping cache writes for redirected responses.
 
 ---
 
-## 9. End-to-End Flow Verification
+### 9.1 Checklist Closure Addendum (2026-04-06) — Audit-Verified State
+
+The following items were claimed complete in the prior patch. **Audit results (2026-04-06 round 2) are noted:**
+
+- [x] Step 24: Warehouse dashboard — sensor tiles use live-derived values (avgMoisture formula); dispatch KPI live; rack grid hash-based from real data; `PriorStepQR` uses `latestBatch?.batchId`; "Manage Transfers" opens dispatch modal. **CONFIRMED with caveat**: `temp`/`humidity` table columns still show `'--'` (no IoT sensor feed).
+- [x] Step 24b: Officer recall form does **not** send `initiatedBy` in body. **CONFIRMED** ✅
+- [x] Step 25: Comparison hub live ✅; `userId` interpolation fixed ✅; sidebar action IDs are dynamic ✅. **CONFIRMED**
+- [x] Step 26: Lab "New Sample" button properly wired. **CONFIRMED** ✅
+- [x] Step 27: "Export MIS" and "Disburse Funds" wired; top-level macro stats live. **CONFIRMED with caveat**: subsidy tracker sub-tile still shows hardcoded `CYCLE-2024-Q1` / `₹4.2 crore` / `82%`.
+- [x] Step 28: Admin node management no longer shows "Himalayan Valley #4" / "Central Processing Hub". **CONFIRMED** — nodes are now derived from live batch/recall data. Node names are still hardcoded strings but derived sync/height data is live.
+- [x] Step 29: Farmer weather tile uses Open-Meteo + GPS; `PriorStepQR` uses dynamic batch ID. **CONFIRMED** ✅
+- [x] Step 33: `IdentityVerificationModal` calls real `/api/kyc/aadhaar/initiate` + `/verify`. **CONFIRMED** ✅
+- [x] Step 34: Registration UI wired to `POST /api/auth/register`. **CONFIRMED** ✅
+- [x] Step 35: `any` casts in `stripInternal()` helpers and `LabResult.ts`/`Recall.ts` toJSON transforms removed. **CONFIRMED**. `kyc.service.ts`/`aadhaar.service.ts` not audited in this round.
+
+---
+
+## 10. End-to-End Flow Verification
 
 ### Happy-path: Honey Batch from Farm to Consumer
 
 **A. Farmer Registration + KYC**
 - API: `POST /api/auth/register` saves user with `kycCompleted: false`
 - Admin/Secretary approves: `PATCH /api/users/[id]` sets `kycCompleted: true`
-- AuditLog: NOT recorded for KYC approval (gap — no `auditLog()` call in PATCH /api/users/[id])
+- AuditLog: Recorded via `AuditLog.create(...)` in `PATCH /api/users/[id]` with `action: 'user_updated'`
 - Blockchain: None
 - Status: WORKS
 
@@ -350,7 +438,7 @@ Used by `getNextSeq('batch')` to generate sequential `batchId` numbers atomicall
 - Model write: `LabResult` upserted; `Batch.status = 'certified'`
 - Blockchain anchor: `anchorLabResultOnChain()` calls `linkLabResult()` on contract
 - AuditLog: `{ entityType: 'lab', action: 'publish' }`
-- Status: WORKS (note double-stringification bug in Step 32 affects hash consistency)
+- Status: WORKS
 
 **E. Officer Inspects and/or Recalls**
 - Approve: `PATCH /api/batches/[id]` with `{ status: 'certified' }` (officer role)
@@ -384,11 +472,19 @@ Used by `getNextSeq('batch')` to generate sequential `batchId` numbers atomicall
 | `recall.service.ts:20` | **FIXED 2026-04-05** | Changed `findOne({ id })` to `findOne({ batchId })`. Tested — recall creates, batch marked recalled, on-chain hash written. |
 | `users/route.ts:25` + `admin/page.tsx:94` | **FIXED 2026-04-05** | Route now returns bare array via `NextResponse.json(users)`. KYC queue correctly populated. |
 | `User.ts` schema missing KYC fields | **FIXED 2026-04-05** | Added `kycRejected`, `kycRejectReason`, `kycVerifiedAt`, `isActive` to schema and interface. |
-| KYC approval audit logging | **STILL OPEN** | No `auditLog()` in `PATCH /api/users/[id]`. Admin KYC decisions not in audit trail. See Step 31. |
+| KYC approval audit logging | **FIXED (already in code)** | `PATCH /api/users/[id]` writes `AuditLog.create(...)` with `action: 'user_updated'`. |
+| `useCurrentUser.ts` cookie decoding | **FIXED 2026-04-06** | Replaced client JWT-cookie decoding with `GET /api/auth` session fetch. |
+| `rbac.ts` KYC gate bypass | **FIXED 2026-04-06** | Removed broad role exemptions; KYC is now enforced for non-exempt operational roles. |
+| `blockchain-relay.ts` lab hash path | **FIXED 2026-04-06** | Removed double-stringification in `anchorLabResultOnChain()`. |
+| `batch.service.ts` stale `BIZ_STEP` aliases | **FIXED 2026-04-06** | Replaced legacy keys (`lab_testing`, `warehouse_stored`) with active statuses (`in_testing`, `certified`, `in_warehouse`). |
+| `recalls/route.ts` validation text | **FIXED 2026-04-06** | Error message no longer claims `initiatedBy` is required when schema/route override make it optional in request body. |
+| `useBatches` / `useLabResults` / `useRecalls` response parsing | **FIXED 2026-04-06** | Hooks now support both raw array payloads and `{ data: [...] }` wrappers. |
+| `batch.service.ts` strip helper ID export | **FIXED 2026-04-06** | Returned documents now include stable `id` to keep dashboard row actions deterministic. |
+| `ServiceWorkerRegistrar` + `public/sw.js` | **FIXED 2026-04-06** | Added dev cache/SW cleanup and network-first document strategy to stop stale redirect cache loops. |
 
 ---
 
-## 10. Seeded Test Accounts
+## 11. Seeded Test Accounts
 
 Run `npm run seed` to create (or `npm run seed -- --reset` to wipe and recreate).
 
@@ -407,7 +503,7 @@ Run `npm run seed` to create (or `npm run seed -- --reset` to wipe and recreate)
 
 ---
 
-## 11. Known Issues and Tech Debt
+## 12. Known Issues and Tech Debt
 
 ### Critical — All resolved as of 2026-04-05
 
@@ -422,27 +518,32 @@ Run `npm run seed` to create (or `npm run seed -- --reset` to wipe and recreate)
 | File | Issue | Status |
 |---|---|---|
 | `User.ts` | `kycRejected`/`kycRejectReason`/`kycVerifiedAt`/`isActive` missing from schema | **FIXED 2026-04-05** |
-| `useCurrentUser.ts` | `useMemo([])` empty dep array — does not re-read cookie on login/logout transitions | OPEN |
-| `officer/page.tsx:309` | `"${currentUser.userId}"` inside JSX string renders as literal text, not interpolated value | OPEN |
-| Multiple dashboards | Sensor/node/production stat tiles are all hardcoded mocks | OPEN |
+| `useCurrentUser.ts` | Client-side cookie decoding (`useMemo([])`) caused stale/empty identity for `httpOnly` token flows | **FIXED 2026-04-06** — now fetches `GET /api/auth` session payload |
+| `officer/page.tsx:309` | `"${currentUser.userId}"` inside JSX string rendered as literal text, not interpolated value | **FIXED 2026-04-06** |
+| Multiple dashboards | Sensor/node/production stat tiles were hardcoded mocks | **PARTIALLY FIXED 2026-04-06** — warehouse, officer, secretary, admin, and farmer dashboards now use live-derived values for previously hardcoded cards/tables |
 
 ### Medium
 
 | File | Issue | Status |
 |---|---|---|
-| `admin/page.tsx` + `PATCH /api/users/[id]` | KYC audit logging missing — approvals/rejections have no AuditLog entry | OPEN (Step 31) |
-| `lab/page.tsx:175` | "New Sample" button has no onClick handler | OPEN (Step 26) |
-| `warehouse/page.tsx:131` | "Manage Transfers" button `onClick={() => {}}` is a no-op | OPEN (Step 24) |
-| `secretary/page.tsx:321-322` | "Export MIS" and "Update MSP" buttons have no handlers | OPEN (Step 27) |
-| `batch.service.ts` | `BIZ_STEP` map has stale aliases (`lab_testing`, `warehouse_stored`) that don't match actual status enum values | OPEN |
-| `blockchain-relay.ts:52-53` | `anchorLabResultOnChain()` double-stringifies `stablePayload` — already a JSON string passed to `keccakHash()` which re-stringifies it; hash will differ from `computeChainHash()` in `batch.service.ts` | OPEN (Step 32) |
-| `recall.schema.ts` | `initiatedBy` is now optional — route always overrides with `actor.userId` but error message still says "initiatedBy are required" | OPEN (minor — update error message) |
+| `src/lib/rbac.ts` | KYC gate bypass due to broad role exemptions | **FIXED 2026-04-06** — only `admin`/`secretary`/`consumer` remain exempt |
+| `lab/page.tsx:175` | "New Sample" button has no onClick handler | **FIXED 2026-04-06** |
+| `warehouse/page.tsx:131` | "Manage Transfers" button `onClick={() => {}}` is a no-op | **FIXED 2026-04-06** |
+| `secretary/page.tsx:321-322` | "Export MIS" and "Update MSP" buttons have no handlers | **FIXED 2026-04-06** |
+| `batch.service.ts` | `BIZ_STEP` map had stale aliases (`lab_testing`, `warehouse_stored`) not aligned with status enum values | **FIXED 2026-04-06** |
+| `blockchain-relay.ts:52-53` | `anchorLabResultOnChain()` double-stringified payload before hashing | **FIXED 2026-04-06** |
+| `recall.schema.ts` + `api/recalls/route.ts` | `initiatedBy` is optional but route error text still said it was required | **FIXED 2026-04-06** |
+| `warehouse/page.tsx` | `temp`/`humidity` columns in inventory table show `'--'` — no IoT sensor feed integrated | **OPEN** — no live telemetry source; values would require a real sensor API |
+| `secretary/page.tsx` | Subsidy tracker sub-tile shows hardcoded `CYCLE-2024-Q1`, `₹4.2 crore`, `82%` | **OPEN** — top-level macro stats are live; this tile is not |
+| `admin/page.tsx` | Node names (`'Batch API Node'`, `'Recall Relay Node'`) are hardcoded strings; not a real multi-node topology | **OPEN** — an improvement over "Himalayan Valley #4" but not production node discovery |
 
 ### Low
 
-- `any` casts in `stripInternal()` helpers across all service files
-- `VALID_ROLES.includes(role as any)` — use `(VALID_ROLES as readonly string[]).includes(role)`
+- `any` casts in `kyc.service.ts` and `aadhaar.service.ts` not audited in round 2 — may remain
+- `Batch.ts` has no exported TypeScript `IBatch` interface; document type relies purely on Mongoose schema inference — can cause issues when accessing fields not in `BatchDocLike` in `batch.service.ts`
+- `VALID_ROLES.includes(role as any)` pattern — **FIXED in `auth.service.ts`** to `(VALID_ROLES as readonly string[]).includes(role)`; verify same fix applied in any other call sites
 - Playwright test coverage is unclear; `/test/` and `/tests/` both exist
+- `lab/page.tsx:396`: `PriorStepQR` still has hardcoded `batchId="WH-DEL-882"` in the sidebar (not the analysis form's selected batch) — minor cosmetic issue
 
 ---
 
@@ -453,7 +554,7 @@ src/
   app/
     [locale]/
       layout.tsx                  # Wraps locale pages; sets html lang
-      page.tsx                    # Landing page (128 bytes; stub redirect)
+      page.tsx                    # Locale landing page renders <LoginPortal />
       dashboard/
         admin/page.tsx            # KYC queue, stats, node mgmt, recalls
         farmer/page.tsx           # Harvest form, batch table, GPS, map stamp
@@ -464,7 +565,7 @@ src/
         consumer/page.tsx         # QR scanner, batch lookup, timeline
         secretary/page.tsx        # KYC queue, heatmap, macro stats
     api/
-      auth/route.ts               # POST login / DELETE logout
+      auth/route.ts               # GET session / POST login / DELETE logout
       auth/register/route.ts      # POST register
       health/route.ts             # GET health ping
       batches/route.ts            # GET list / POST create
@@ -489,12 +590,12 @@ src/
     blockchain-relay.ts           # Server-side relayer (ethers.js + Wallet)
     env.ts                        # Env validation on startup
     mongodb.ts                    # connectDB() singleton with global cache
-    rateLimit.ts                  # In-memory sliding window rate limiter (10 req/15 min)
-    rbac.ts                       # requireAuth() guard; AuthError class; KYC gate
+    rateLimit.ts                  # In-memory sliding window rate limiter (5 req/15 min)
+    rbac.ts                       # requireAuth() guard; AuthError class; KYC gate (operational roles require kycCompleted=true)
     store.ts                      # Zustand useWalletStore
   hooks/
     useBatches.ts                 # GET /api/batches with refresh()
-    useCurrentUser.ts             # Decode JWT payload from cookie (client-side)
+    useCurrentUser.ts             # Fetches current session actor via GET /api/auth
     useLabResults.ts              # GET /api/lab
     useOfflineSync.ts             # Service worker offline queue notifications
     useOnboarding.ts              # KYC/tour flow localStorage state

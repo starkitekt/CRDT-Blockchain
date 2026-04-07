@@ -107,5 +107,7 @@ export const recallsApi = {
 export const authApi = {
   login:  (email: string, password: string, role: string) =>
     apiPost<{ success: boolean; role: string }>('/api/auth', { email, password, role }),
+  register: (payload: { name: string; email: string; password: string; role: string }) =>
+    apiPost<{ token: string; user: { id: string; name: string; email: string; role: string; kycCompleted: boolean } }>('/api/auth/register', payload),
   logout: () => apiDelete<{ success: boolean }>('/api/auth'),
 };

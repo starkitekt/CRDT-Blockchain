@@ -11,10 +11,9 @@ import { anchorBatchOnChain, isBlockchainRelayEnabled } from '../blockchain-rela
 // â”€â”€ GS1 CBV BizStep mapping â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const BIZ_STEP: Record<string, string> = {
   pending: 'commissioning',
-  lab_testing: 'inspecting',
-  lab_approved: 'accepting',
-  warehouse_stored: 'storing',
-  export_ready: 'shipping',
+  in_testing: 'inspecting',
+  certified: 'accepting',
+  in_warehouse: 'storing',
   dispatched: 'departing',
   recalled: 'returning',
 };
@@ -101,9 +100,23 @@ function buildChainPayload(
   };
 }
 
-function stripInternal(doc: any) {
-  const { _id, _payloadHash, __v, ...rest } = doc;
-  return { ...rest, payloadHash: _payloadHash ?? null }; // expose it renamed
+type BatchDocLike = Record<string, unknown> & {
+  _id?: unknown;
+  _payloadHash?: string;
+  __v?: unknown;
+  batchId?: string;
+};
+
+function stripInternal(doc: BatchDocLike) {
+  const rest = { ...doc };
+  delete rest._id;
+  delete rest._payloadHash;
+  delete rest.__v;
+  return {
+    ...rest,
+    id: doc._id != null ? String(doc._id) : (doc.batchId ?? ''),
+    payloadHash: doc._payloadHash ?? null,
+  }; // expose payload hash + stable id for frontend tables/actions
 }
 
 /**
@@ -133,7 +146,7 @@ export async function createBatch(
 
   // â”€â”€ Moisture business rule â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (input.moisturePct > 20) {
-    const err: any = new Error('MOISTURE_VIOLATION');
+    const err = new Error('MOISTURE_VIOLATION') as Error & { violations?: string[] };
     err.violations = [
       `Moisture content ${input.moisturePct}% exceeds Codex limit of 20%`,
     ];
@@ -152,8 +165,6 @@ export async function createBatch(
   // â”€â”€ Create DB record â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const seq = await getNextSeq('batch');
   const batchId = formatBatchId(seq);
-  const now = new Date().toISOString();
-
   const batch = await Batch.create({
     ...input,
     batchId,
@@ -362,7 +373,8 @@ export async function verifyBatchIntegrity(
         ? 'Data integrity confirmed â€” DB matches blockchain record'
         : 'âš ï¸ TAMPER DETECTED â€” DB data does not match blockchain record',
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown chain error';
     return {
       batchId: id,
       status: 'chain_unavailable',
@@ -371,7 +383,7 @@ export async function verifyBatchIntegrity(
       onChainTxHash: batch.onChainTxHash,
       recordedAt: null,
       recorder: null,
-      message: `Chain read failed: ${err.message}`,
+      message: `Chain read failed: ${message}`,
     };
   }
 }

@@ -2,9 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { LoginSchema } from '@/lib/validation/auth.schema';
 import { loginUser } from '@/lib/services/auth.service';
 import { checkRateLimit, resetRateLimit } from '@/lib/rateLimit';
+import { requireAuth, handleAuthError, AuthError } from '@/lib/rbac';
 
 
 const COOKIE_MAX_AGE = 60 * 60 * 8; // 8 hours
+
+
+export async function GET(req: NextRequest) {
+  try {
+    const actor = requireAuth(req);
+    return NextResponse.json({ user: actor });
+  } catch (err) {
+    if (err instanceof AuthError) return handleAuthError(err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
 
 
 export async function POST(req: NextRequest) {
@@ -49,8 +61,8 @@ export async function POST(req: NextRequest) {
     response.cookies.set('honeytrace_token', token, cookieOpts);
     return response;
 
-  } catch (err: any) {
-    if (['INVALID_CREDENTIALS', 'ROLE_MISMATCH', 'INVALID_ROLE'].includes(err.message)) {
+  } catch (err: unknown) {
+    if (err instanceof Error && ['INVALID_CREDENTIALS', 'ROLE_MISMATCH', 'INVALID_ROLE'].includes(err.message)) {
       return NextResponse.json({ error: 'Invalid credentials or role' }, { status: 401 });
     }
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });

@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   try {
     requireAuth(req, READ_ROLES);
     const data = await listLabResults();
-    return NextResponse.json({ data });
+    return NextResponse.json(data);
 
   } catch (err) {
     if (err instanceof AuthError) return handleAuthError(err);

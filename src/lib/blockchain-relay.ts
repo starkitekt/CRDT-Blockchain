@@ -49,8 +49,7 @@ export async function anchorBatchOnChain(
 
 export async function anchorLabResultOnChain(batchId: string, payload: Record<string, unknown>): Promise<string> {
   const contract = getRelayContract();
-  const stablePayload = JSON.stringify(payload, Object.keys(payload).sort());
-  const payloadHash = keccakHash(stablePayload);
+  const payloadHash = keccakHash(payload);
   const tx = await contract.linkLabResult(batchId, payloadHash);
   const receipt = await tx.wait();
   return receipt.hash;

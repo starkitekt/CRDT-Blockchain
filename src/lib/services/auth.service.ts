@@ -22,7 +22,7 @@ export async function loginUser(
 ): Promise<LoginResult> {
   await connectDB();
 
-  if (!VALID_ROLES.includes(role as any)) {
+  if (!(VALID_ROLES as readonly string[]).includes(role)) {
     throw new Error("INVALID_ROLE");
   }
 

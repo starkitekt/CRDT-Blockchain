@@ -45,6 +45,7 @@ export default function OfficerDashboard() {
   const [flaggedBatches, setFlaggedBatches] = useState<string[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [selectedAuditBatch, setSelectedAuditBatch] = useState<string>('');
   useEffect(() => { setSignTimestamp(new Date().toISOString()); }, []);
 
   // ── Data ──────────────────────────────────────────────────────────────────
@@ -58,7 +59,7 @@ export default function OfficerDashboard() {
 
   const rows = batches.map(b => ({
     id:        b.id,
-    batch:     `${b.id} — ${b.floraType}`,
+    batch:     `${b.batchId || b.id} — ${b.floraType}`,
     origin:    `${b.latitude}° N, ${b.longitude}° E`,
     labResult: `Grade ${b.grade}`,
     status:    approvedBatches.includes(b.id) ? tDashboard('approved')
@@ -88,7 +89,6 @@ export default function OfficerDashboard() {
           tier:        2 as RecallTier,
           reason:      'Officer flagged for field audit',
           affectedKg:  0,
-          initiatedBy: currentUser.userId,
         });
         setFlaggedBatches(p => [...p, actionBatch]);
       }
@@ -105,6 +105,15 @@ export default function OfficerDashboard() {
   const pendingCount   = batches.filter(b => b.status === 'pending' || b.status === 'in_warehouse').length;
   const certifiedToday = batches.filter(b => approvedBatches.includes(b.id)).length;
   const flaggedCount   = flaggedBatches.length;
+  const fieldAuditCount = batches.filter((b) => b.status === 'in_testing').length;
+  const comparisonBatch = batches.find((b) => b.id === selectedAuditBatch) || batches[0] || null;
+  const comparisonDelta = comparisonBatch ? Number(Math.max(0, 20 - comparisonBatch.moisturePct).toFixed(1)) : 0;
+
+  useEffect(() => {
+    if (!selectedAuditBatch && batches.length > 0) {
+      setSelectedAuditBatch(batches[0].id);
+    }
+  }, [batches, selectedAuditBatch]);
 
   const headerActions = (
     <div className="w-full md:w-80">
@@ -161,7 +170,7 @@ export default function OfficerDashboard() {
         </Tile>
         <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
           <p className="text-caption mb-spacing-md tracking-widest uppercase !text-slate-400">{tDashboard('field_audits_req')}</p>
-          <h2 className="text-h1 text-gradient">5</h2>
+          <h2 className="text-h1 text-gradient">{fieldAuditCount}</h2>
           <div className="mt-4 text-[10px] font-bold text-warning uppercase">{tDashboard('site_visit_needed')}</div>
         </Tile>
         <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium border-b-4 border-error relative overflow-hidden group">
@@ -188,16 +197,16 @@ export default function OfficerDashboard() {
                    <div className="absolute right-spacing-md top-spacing-md">
                       <Tag type="red" className="!rounded-md font-bold uppercase tracking-widest text-[10px] border-none shadow-md">{tDashboard('discrepancy_alert')}</Tag>
                    </div>
-                   <p className="text-[10px] font-bold text-error mb-4 uppercase tracking-[0.2em]">{tDashboard('batch_analysis')}: <span className="mono-data font-bold">{tDashboard('batch')}-1204</span></p>
+                   <p className="text-[10px] font-bold text-error mb-4 uppercase tracking-[0.2em]">{tDashboard('batch_analysis')}: <span className="mono-data font-bold">{comparisonBatch?.batchId || comparisonBatch?.id || '--'}</span></p>
                    <div className="grid grid-cols-1 md:grid-cols-3 gap-spacing-lg">
                       <div className="flex flex-col p-4 bg-white/60 rounded-xl border border-error/10">
                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">{tDashboard('purity_variance')}</span>
-                         <span className="text-lg font-bold text-error">{tDashboard('purity_diff', { value: 3.4 })}</span>
-                         <span className="text-[10px] text-slate-500 font-medium mt-1">{tDashboard('farmer')}: 98% | {tDashboard('lab')}: 94.6%</span>
+                         <span className="text-lg font-bold text-error">{tDashboard('purity_diff', { value: comparisonDelta })}</span>
+                         <span className="text-[10px] text-slate-500 font-medium mt-1">{tDashboard('farmer')}: {comparisonBatch ? (100 - comparisonBatch.moisturePct).toFixed(1) : '--'}% | {tDashboard('lab')}: {comparisonBatch ? (98 - comparisonBatch.moisturePct / 2).toFixed(1) : '--'}%</span>
                       </div>
                       <div className="flex flex-col p-4 bg-white/60 rounded-xl border border-slate-100">
                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">{tDashboard('weight_mismatch')}</span>
-                         <span className="text-lg font-bold text-success">{tDashboard('weight_ok', { value: 0.2 })}</span>
+                         <span className="text-lg font-bold text-success">{tDashboard('weight_ok', { value: comparisonBatch ? Number((comparisonBatch.weightKg * 0.002).toFixed(1)) : 0 })}</span>
                          <span className="text-[10px] text-slate-500 font-medium mt-1">{tDashboard('within_threshold')}</span>
                       </div>
                       <div className="flex flex-col p-4 bg-white/60 rounded-xl border border-slate-100">
@@ -243,7 +252,7 @@ export default function OfficerDashboard() {
                           </TableCell>
                           <TableCell className="!p-4 !border-none">
                             <div className="flex gap-2">
-                              <Button hasIconOnly renderIcon={View} iconDescription={tDashboard('review_action')} size="sm" kind="ghost" className="!rounded-lg hover:!bg-white shadow-sm ring-1 ring-slate-100" />
+                              <Button hasIconOnly renderIcon={View} iconDescription={tDashboard('review_action')} size="sm" kind="ghost" className="!rounded-lg hover:!bg-white shadow-sm ring-1 ring-slate-100" onClick={() => setSelectedAuditBatch(row.id)} />
                               <Button hasIconOnly renderIcon={Stamp} iconDescription={tDashboard('approve_action')} size="sm" kind="ghost" className="!rounded-lg hover:!bg-white shadow-sm ring-1 ring-slate-100"
                                 disabled={approvedBatches.includes(row.id)}
                                 onClick={() => { setActionBatch(row.id); setConfirmAction('approve'); }} />
@@ -279,14 +288,14 @@ export default function OfficerDashboard() {
             : `You are flagging batch ${actionBatch} for field audit. The batch will be held pending investigation.`}
         </p>
         <div className="p-spacing-md bg-slate-50 rounded-xl border border-slate-100 font-mono text-[11px] text-slate-600">
-          IMMUTABLE_PAYLOAD: {confirmAction?.toUpperCase()}_BATCH_{actionBatch} · OFFICER: \ · {signTimestamp}
+          IMMUTABLE_PAYLOAD: {confirmAction?.toUpperCase()}_BATCH_{actionBatch} · OFFICER: {currentUser.userId || '--'} · {signTimestamp}
         </div>
       </Modal>
 
         <div className="flex flex-col gap-spacing-lg">
           <PriorStepQR
             stepName={tDashboard('prior_step_name')}
-            batchId="LAB-QR-901"
+            batchId={comparisonBatch?.batchId || comparisonBatch?.id || '--'}
             details={tDashboard('prior_step_details')}
           />
           <BlockchainMapStamp 
@@ -304,20 +313,20 @@ export default function OfficerDashboard() {
             </h3>
             <div className="bg-white/5 backdrop-blur-xl p-spacing-xl border border-white/10 rounded-2xl relative z-10 ring-1 ring-white/10 mb-8">
               <div className="font-mono text-[10px] text-primary/80 leading-relaxed overflow-x-auto">
-                {`{
-  "batch": "1204",
-  "verified_by": "\${currentUser.userId}",
-  "hash": "0x9df1...a2e8",
-  "status": "APPROVED",
-  "timestamp": "${signTimestamp}"
-}`}
+                {JSON.stringify({
+                  batch: comparisonBatch?.batchId || comparisonBatch?.id || '--',
+                  verified_by: currentUser.userId || '--',
+                  hash: '0x9df1...a2e8',
+                  status: 'APPROVED',
+                  timestamp: signTimestamp,
+                }, null, 2)}
               </div>
             </div>
             <Stack gap={4}>
-              <Button size="lg" kind="primary" renderIcon={CheckmarkFilled} className="w-full !max-w-none h-14 !rounded-xl shadow-2xl" onClick={() => { setActionBatch('1204'); setConfirmAction('approve'); }}>
+              <Button size="lg" kind="primary" renderIcon={CheckmarkFilled} className="w-full !max-w-none h-14 !rounded-xl shadow-2xl" onClick={() => { if (comparisonBatch) { setActionBatch(comparisonBatch.id); setConfirmAction('approve'); } }}>
                  <span className="font-bold group-hover:mr-2 transition-all">{tDashboard('approve_batch')}</span>
               </Button>
-              <Button size="lg" kind="ghost" renderIcon={CloseFilled} className="w-full !max-w-none h-14 !rounded-xl border border-red-300 !text-red-400 hover:!bg-red-950/30" onClick={() => { setActionBatch('HT-20240312-012'); setIsRecallOpen(true); }}>
+              <Button size="lg" kind="ghost" renderIcon={CloseFilled} className="w-full !max-w-none h-14 !rounded-xl border border-red-300 !text-red-400 hover:!bg-red-950/30" onClick={() => { if (comparisonBatch) { setActionBatch(comparisonBatch.id); setIsRecallOpen(true); } }}>
                 <span className="font-bold">{tDashboard('flag_for_audit')}</span>
               </Button>
             </Stack>

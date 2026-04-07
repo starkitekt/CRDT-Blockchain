@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     const farmerId = req.nextUrl.searchParams.get('farmerId') ?? undefined;
     const status = req.nextUrl.searchParams.get('status') ?? undefined;
     const data = await listBatches(farmerId, status);
-    return NextResponse.json({ data });
+    return NextResponse.json(data);
 
   } catch (err: any) {
     if (err instanceof AuthError) return handleAuthError(err);

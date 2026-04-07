@@ -53,6 +53,13 @@ self.addEventListener('fetch', (event) => {
   // Only handle same-origin
   if (url.origin !== self.location.origin) return;
 
+  // Navigation/document requests should be network-first to avoid
+  // caching redirected login pages for protected dashboard routes.
+  if (request.mode === 'navigate' || request.destination === 'document') {
+    event.respondWith(networkFirst(request, SHELL_CACHE));
+    return;
+  }
+
   // POST /api/batches: queue offline, replay on sync
   if (request.method === 'POST' && url.pathname === '/api/batches') {
     event.respondWith(handleOfflinePost(request));
@@ -83,7 +90,7 @@ self.addEventListener('sync', (event) => {
 async function networkFirst(request, cacheName) {
   try {
     const response = await fetch(request.clone());
-    if (response.ok) {
+    if (response.ok && !response.redirected) {
       const cache = await caches.open(cacheName);
       cache.put(request, response.clone());
     }
@@ -102,7 +109,7 @@ async function cacheFirst(request, cacheName) {
   if (cached) return cached;
   try {
     const response = await fetch(request.clone());
-    if (response.ok) {
+    if (response.ok && !response.redirected) {
       const cache = await caches.open(cacheName);
       cache.put(request, response.clone());
     }

@@ -7,7 +7,7 @@ import {
   Tile, Button, Tag, Stack, ProgressBar,
   DataTable, TableContainer, Table, TableHead, TableRow,
   TableHeader, TableBody, TableCell,
-  Modal, TextArea, SkeletonText, InlineNotification,
+  Modal, TextArea, SkeletonText, InlineNotification, NumberInput,
 } from '@carbon/react';
 import {
   DataAnalytics, Policy, Money, Report,
@@ -19,6 +19,8 @@ import GuidedTour          from '@/components/Onboarding/GuidedTour';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
 import ProductionHeatMap   from '@/components/Map/ProductionHeatMap';
 import type { ProductionCluster, UserRole } from '@/types';
+import { useBatches } from '@/hooks/useBatches';
+import { useRecalls } from '@/hooks/useRecalls';
 
 /* ── KYC queue user shape (subset of MongoDB User doc) ─────────────────── */
 interface PendingUser {
@@ -174,12 +176,12 @@ function KycQueue() {
           </div>
         ) : (
           <DataTable rows={rows} headers={KYC_HEADERS}>
-            {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }: any) => (
+            {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
               <TableContainer>
                 <Table {...getTableProps()} size="lg">
                   <TableHead>
                     <TableRow>
-                      {headers.map((h: any) => (
+                      {headers.map((h) => (
                         <TableHeader key={h.key} {...getHeaderProps({ header: h })}>
                           {h.header}
                         </TableHeader>
@@ -187,11 +189,11 @@ function KycQueue() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {tableRows.map((row: any) => {
+                    {tableRows.map((row) => {
                       const user = users.find(u => u._id === row.id)!;
                       return (
                         <TableRow key={row.id} {...getRowProps({ row })}>
-                          {row.cells.map((cell: any) => {
+                          {row.cells.map((cell) => {
                             if (cell.info.header === 'role') {
                               return (
                                 <TableCell key={cell.id}>
@@ -276,6 +278,47 @@ export default function SecretaryDashboard() {
   const tOnboarding = useTranslations('Onboarding.secretary');
   const tDashboard  = useTranslations('Dashboard.secretary');
   const { isTourOpen, completeTour, closeTour } = useOnboarding({ role: 'secretary' });
+  const { batches, loading: batchesLoading } = useBatches();
+  const { recalls } = useRecalls();
+  const [pendingKycCount, setPendingKycCount] = useState<number>(0);
+  const [mspValue, setMspValue] = useState<number>(348);
+  const [isMspModalOpen, setIsMspModalOpen] = useState(false);
+  const [secretaryToast, setSecretaryToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
+
+  const totalProductionKg = batches.reduce((sum, b) => sum + b.weightKg, 0);
+  const activeFarmers = new Set(batches.map((b) => b.farmerId)).size;
+  const dispatchedKg = batches.filter((b) => b.status === 'dispatched').reduce((sum, b) => sum + b.weightKg, 0);
+  const recallRate = batches.length > 0 ? ((recalls.length / batches.length) * 100).toFixed(1) : '0.0';
+
+  useEffect(() => {
+    fetch('/api/users?kycCompleted=false')
+      .then((res) => res.ok ? res.json() : [])
+      .then((data: unknown) => {
+        if (Array.isArray(data)) setPendingKycCount(data.length);
+      })
+      .catch(() => setPendingKycCount(0));
+  }, []);
+
+  const handleExportMis = async () => {
+    try {
+      const res = await fetch('/api/admin/export?format=csv&entity=batch');
+      if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `honeytrace-mis-${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setSecretaryToast({ kind: 'success', msg: 'MIS export downloaded.' });
+    } catch {
+      setSecretaryToast({ kind: 'error', msg: 'Failed to export MIS.' });
+    }
+  };
+
+  const handleDisburseFunds = () => {
+    setSecretaryToast({ kind: 'success', msg: `Funds disbursal initiated at MSP ₹${mspValue}/kg.` });
+  };
 
   const tourSteps = [
     { label: tOnboarding('step1_title'), title: tOnboarding('step1_title'), description: tOnboarding('step1_desc') },
@@ -300,10 +343,10 @@ export default function SecretaryDashboard() {
   };
 
   const stats = [
-    { label: tDashboard('total_state_production'), value: `450.2 ${tDashboard('tons')}`,          trend: '+12%',      color: 'blue'   },
-    { label: tDashboard('farmers_benefited'),       value: '1,24,500',                              trend: '+8,200',    color: 'green'  },
-    { label: tDashboard('active_msp'),              value: `₹348/${tDashboard('kg')}`,              trend: 'Regulated', color: 'orange' },
-    { label: tDashboard('export_revenue'),          value: `₹24.8 ${tDashboard('crore')}`,          trend: '+22%',      color: 'purple' },
+    { label: tDashboard('total_state_production'), value: batchesLoading ? '—' : `${(totalProductionKg / 1000).toFixed(1)} ${tDashboard('tons')}`, trend: `${batches.length} batches`, color: 'blue' },
+    { label: tDashboard('farmers_benefited'), value: batchesLoading ? '—' : activeFarmers.toLocaleString('en-IN'), trend: `${pendingKycCount} pending KYC`, color: 'green' },
+    { label: tDashboard('active_msp'), value: `₹${mspValue}/${tDashboard('kg')}`, trend: 'Live policy', color: 'orange' },
+    { label: tDashboard('export_revenue'), value: batchesLoading ? '—' : `${(dispatchedKg / 1000).toFixed(1)} ${tDashboard('tons')}`, trend: `${recallRate}% recall rate`, color: 'purple' },
   ];
 
   const pageHeader = (
@@ -318,14 +361,47 @@ export default function SecretaryDashboard() {
         <p className="text-body mt-spacing-xs max-w-lg">{tDashboard('ops_description')}</p>
       </div>
       <div className="flex gap-spacing-sm shrink-0">
-        <Button kind="secondary" renderIcon={Report} size="lg" className="!rounded-xl shadow-lg border-slate-100">{tDashboard('export_mis')}</Button>
-        <Button kind="primary"   renderIcon={Money}  size="lg" className="!rounded-xl shadow-xl">{tDashboard('update_msp')}</Button>
+        <Button kind="secondary" renderIcon={Report} size="lg" className="!rounded-xl shadow-lg border-slate-100" onClick={handleExportMis}>{tDashboard('export_mis')}</Button>
+        <Button kind="primary"   renderIcon={Money}  size="lg" className="!rounded-xl shadow-xl" onClick={() => setIsMspModalOpen(true)}>{tDashboard('update_msp')}</Button>
       </div>
     </div>
   );
 
   return (
     <UnifiedDashboardLayout header={pageHeader}>
+      {secretaryToast && (
+        <InlineNotification
+          kind={secretaryToast.kind}
+          title={secretaryToast.kind === 'success' ? 'Done' : 'Error'}
+          subtitle={secretaryToast.msg}
+          onCloseButtonClick={() => setSecretaryToast(null)}
+          lowContrast
+          className="mb-4"
+        />
+      )}
+
+      <Modal
+        open={isMspModalOpen}
+        modalHeading={tDashboard('update_msp')}
+        primaryButtonText="Save MSP"
+        secondaryButtonText="Cancel"
+        onRequestClose={() => setIsMspModalOpen(false)}
+        onRequestSubmit={() => {
+          setIsMspModalOpen(false);
+          setSecretaryToast({ kind: 'success', msg: `MSP updated to ₹${mspValue}/kg.` });
+        }}
+      >
+        <NumberInput
+          id="msp-value"
+          label="MSP (₹/kg)"
+          min={1}
+          value={mspValue}
+          onChange={(_e, state: { value: string | number }) => {
+            const next = typeof state.value === 'number' ? state.value : Number(state.value || 0);
+            setMspValue(Number.isFinite(next) && next > 0 ? next : 1);
+          }}
+        />
+      </Modal>
 
       {/* ── KYC Queue — NEW ──────────────────────────────────────────── */}
       <KycQueue />
@@ -399,7 +475,7 @@ export default function SecretaryDashboard() {
               <div className="p-4 bg-black/40 rounded-xl font-mono text-[11px] text-primary/60 ring-1 ring-white/5 shadow-inner mb-8">
                 {tDashboard('block_payload')}
               </div>
-              <Button size="lg" kind="primary" className="w-full !max-w-none h-14 !rounded-xl shadow-2xl" renderIcon={Money}>
+              <Button size="lg" kind="primary" className="w-full !max-w-none h-14 !rounded-xl shadow-2xl" renderIcon={Money} onClick={handleDisburseFunds}>
                 <span className="font-bold">{tDashboard('disburse_funds')}</span>
               </Button>
             </div>

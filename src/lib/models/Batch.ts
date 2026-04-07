@@ -60,6 +60,7 @@ const BatchSchema = new Schema(
     recallTier: { type: Number, enum: [1, 2, 3] },
     recallInitiatedAt: { type: Date },
     recallTxHash: { type: String },
+    recallInitiatedBy: { type: String },
   },
   {
     id: false,

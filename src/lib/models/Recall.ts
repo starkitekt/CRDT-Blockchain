@@ -7,7 +7,7 @@ const RecallSchema = new Schema(
     tier: { type: Number, required: true, enum: [1, 2, 3] },
     reason: { type: String, required: true },
     affectedKg: { type: Number, required: true },
-    initiatedBy: { type: String, required: true },
+    initiatedBy: { type: String },
     initiatedAt: { type: String, required: true },
     onChainTxHash: { type: String },
   },
@@ -15,7 +15,7 @@ const RecallSchema = new Schema(
 );
 
 RecallSchema.set('toJSON', {
-  transform: (_doc, ret: any) => {
+  transform: (_doc, ret: Record<string, unknown>) => {
     ret._id = undefined;
     return ret;
   },

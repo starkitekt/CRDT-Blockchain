@@ -17,8 +17,12 @@ function runCodexValidation(d: CreateLabResultInput): string[] {
   return v;
 }
 
-function stripInternal(doc: any) {
-  const { _id, __v, ...rest } = doc;
+type LabResultDocLike = Record<string, unknown> & { _id?: unknown; __v?: unknown };
+
+function stripInternal(doc: LabResultDocLike) {
+  const rest = { ...doc };
+  delete rest._id;
+  delete rest.__v;
   return rest;
 }
 
@@ -36,7 +40,7 @@ export async function publishLabResult(
 
   const violations = runCodexValidation(input);
   if (violations.length > 0) {
-    const err: any = new Error('CODEX_VIOLATION');
+    const err = new Error('CODEX_VIOLATION') as Error & { violations?: string[] };
     err.violations = violations;
     throw err;
   }

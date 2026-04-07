@@ -19,7 +19,7 @@ export async function GET(
     const { id } = await params;
     const data = await getBatchById(id);
     if (!data) return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
-    return NextResponse.json({ data });
+    return NextResponse.json(data);
 
   } catch (err) {
     if (err instanceof AuthError) return handleAuthError(err);
@@ -50,7 +50,7 @@ export async function PATCH(
 
     const data = await patchBatch(id, parsed.data, actor.userId, actor.role);
     if (!data) return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
-    return NextResponse.json({ data });
+    return NextResponse.json(data);
 
   } catch (err) {
     if (err instanceof AuthError) return handleAuthError(err);

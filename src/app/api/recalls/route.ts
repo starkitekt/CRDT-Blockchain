@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   try {
     requireAuth(req, ['officer', 'admin', 'secretary', 'enterprise']);
     const data = await listRecalls();
-    return NextResponse.json({ data });
+    return NextResponse.json(data);
   } catch (err) {
     if (err instanceof AuthError) return handleAuthError(err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -27,24 +27,25 @@ export async function POST(req: NextRequest) {
     const parsed = CreateRecallSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'batchId, tier, reason, initiatedBy are required' },
+        { error: 'batchId, tier, reason and affectedKg are required' },
         { status: 400 }
       );
     }
 
+    const actorId = (actor as any).userId ?? (actor as any).id ?? (actor as any).sub ?? 'system';
     const data = await createRecall(
-      { ...parsed.data, initiatedBy: actor.userId },
-      actor.userId,
+      { ...parsed.data, initiatedBy: actorId },
+      actorId,
       actor.role
     );
     return NextResponse.json({ data }, { status: 201 });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err instanceof AuthError) return handleAuthError(err);
-    if (err.message === 'BATCH_NOT_FOUND') {
+    if (err instanceof Error && err.message === 'BATCH_NOT_FOUND') {
       return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
     }
-    if (err.message === 'ALREADY_RECALLED') {
+    if (err instanceof Error && err.message === 'ALREADY_RECALLED') {
       return NextResponse.json({ error: 'Batch already recalled' }, { status: 409 });
     }
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
