@@ -6,13 +6,13 @@ import { AuditLog } from '@/lib/models/AuditLog';
 import { z } from 'zod';
 
 const PatchUserSchema = z.object({
-  kycCompleted:     z.boolean().optional(),
-  kycRejected:      z.boolean().optional(),
-  kycRejectReason:  z.string().max(500).optional(),
-  role:             z.enum(['farmer','warehouse','lab','officer','enterprise','consumer','admin','secretary']).optional(),
-  isActive:         z.boolean().optional(),
-  fssaiLicense:     z.string().optional(),
-  gstin:            z.string().optional(),
+  kycCompleted:       z.boolean().optional(),
+  kycRejected:        z.boolean().optional(),
+  kycRejectReason:    z.string().max(500).optional(),
+  role:               z.enum(['farmer','warehouse','lab','officer','enterprise','consumer','admin','secretary']).optional(),
+  isActive:           z.boolean().optional(),
+  fssaiLicense:       z.string().optional(),
+  gstin:              z.string().optional(),
   labAccreditationId: z.string().optional(),
 }).strict();
 
@@ -26,10 +26,8 @@ export async function GET(
 
   const { id } = await params;
   await connectDB();
-
   const user = await User.findById(id).select('-passwordHash -__v').lean();
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
-
   return NextResponse.json(user);
 }
 
@@ -59,13 +57,11 @@ export async function PATCH(
   }
 
   await connectDB();
-
   const user = await User.findById(id);
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
   const updates = parsed.data;
 
-  // Apply field updates
   if (updates.kycCompleted !== undefined) {
     user.kycCompleted   = updates.kycCompleted;
     user.kycVerifiedAt  = updates.kycCompleted ? new Date() : undefined;
@@ -84,7 +80,6 @@ export async function PATCH(
 
   await user.save();
 
-  // Audit log — non-blocking
   AuditLog.create({
     entityType:  'user',
     entityId:    id,
@@ -96,6 +91,5 @@ export async function PATCH(
 
   const { passwordHash: _, __v, ...clean } =
     user.toObject() as Record<string, unknown>;
-
   return NextResponse.json(clean);
 }

@@ -164,7 +164,7 @@ export default function EnterpriseDashboard() {
                 <TableHead>
                   <TableRow>
                     {headers.map((h: any) => (
-                      <TableHeader key={h.key} {...getHeaderProps({ header: h })}>
+                      <TableHeader key={h.key} {...(() => { const { key: _k, ...rest } = getHeaderProps({ header: h }); return rest; })()}>
                         {h.header}
                       </TableHeader>
                     ))}
@@ -174,7 +174,7 @@ export default function EnterpriseDashboard() {
                   {tableRows.map((row: any) => {
                     const batch = batches.find(b => b.id === row.id)!;
                     return (
-                      <TableRow key={row.id} {...getRowProps({ row })}>
+                      <TableRow key={row.id} {...(() => { const { key: _k, ...rest } = getRowProps({ row }); return rest; })()}>
                         {row.cells.map((cell: any) => {
                           switch (cell.info.header) {
                             case 'quality':

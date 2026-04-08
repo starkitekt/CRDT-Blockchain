@@ -201,7 +201,7 @@ function KycQueue() {
                   <TableHead>
                     <TableRow>
                       {headers.map((h) => (
-                        <TableHeader key={h.key} {...getHeaderProps({ header: h })}>
+                        <TableHeader key={h.key} {...(() => { const { key: _k, ...rest } = getHeaderProps({ header: h }); return rest; })()}>
                           {h.header}
                         </TableHeader>
                       ))}
@@ -211,7 +211,7 @@ function KycQueue() {
                     {tableRows.map((row) => {
                       const user = users.find(u => u._id === row.id)!;
                       return (
-                        <TableRow key={row.id} {...getRowProps({ row })}>
+                        <TableRow key={row.id} {...(() => { const { key: _k, ...rest } = getRowProps({ row }); return rest; })()}>
                           {row.cells.map((cell) => {
                             if (cell.info.header === 'role') return (
                               <TableCell key={cell.id}>

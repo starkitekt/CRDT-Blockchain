@@ -85,7 +85,7 @@ export const batchesApi = {
     return apiGet<{ data: Batch[] }>(`/api/batches${query ? `?${query}` : ''}`);
   },
   get:    (id: string)   => apiGet<{ data: Batch }>(`/api/batches/${id}`),
-  create: (payload: Omit<Batch, 'id' | 'createdAt' | 'status'>) =>
+  create: (payload: Omit<Batch, 'id' | 'batchId' | 'createdAt' | 'status'>) =>
     apiPost<{ data: Batch }>('/api/batches', payload),
   patch:  (id: string, payload: Partial<Batch>) =>
     apiPatch<{ data: Batch }>(`/api/batches/${id}`, payload),
@@ -100,7 +100,7 @@ export const labApi = {
 
 export const recallsApi = {
   list:   ()        => apiGet<{ data: RecallEvent[] }>('/api/recalls'),
-  create: (payload: Omit<RecallEvent, 'id' | 'initiatedAt'>) =>
+  create: (payload: Omit<RecallEvent, 'id' | 'initiatedBy' | 'initiatedAt'>) =>
     apiPost<{ data: RecallEvent }>('/api/recalls', payload),
 };
 

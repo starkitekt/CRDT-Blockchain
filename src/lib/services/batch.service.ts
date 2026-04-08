@@ -350,7 +350,7 @@ export async function verifyBatchIntegrity(
     if (!CONTRACT_ADDRESS) throw new Error('Contract address not configured');
 
     const ABI = [
-      'function getBatch(string batchId) public view returns (bytes32 dataHash, uint256 timestamp, address recorder, string bizStep, string location)',
+      'function getBatch(string batchId) public view returns (bytes32 dataHash, uint256 timestamp, address recorder, string bizStep)',
     ];
 
     const contract = new Contract(CONTRACT_ADDRESS, ABI, provider);
