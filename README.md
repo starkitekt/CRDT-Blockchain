@@ -1,14 +1,15 @@
 # HoneyTRACE (CRDT + Blockchain)
 
-HoneyTRACE is a role-based traceability platform for honey procurement and quality assurance. It combines a Next.js frontend, MongoDB-backed APIs, and a local Hardhat chain for immutable workflow events.
+HoneyTRACE is a role-based traceability platform for honey procurement and quality assurance. It combines a Next.js frontend, MongoDB-backed APIs, and on-chain anchoring via a `HoneyTraceRegistry` smart contract deployed to **Base Sepolia** (with localhost Hardhat support for development).
 
 ## Tech Stack
 
-- Next.js App Router + TypeScript
+- Next.js 16 App Router + TypeScript
 - Carbon Design System (`@carbon/react`)
 - `next-intl` localization
-- MongoDB (`mongoose`)
-- Hardhat + Ethers
+- MongoDB 7 (`mongoose`)
+- Hardhat + Ethers v6
+- Base Sepolia testnet (chain ID 84532)
 - Playwright + Vitest
 
 ## Project Structure
@@ -16,15 +17,18 @@ HoneyTRACE is a role-based traceability platform for honey procurement and quali
 - `src/app/[locale]/dashboard/*`: role dashboards (farmer, warehouse, lab, officer, enterprise, consumer, secretary, admin)
 - `src/app/api/*`: auth and domain APIs
 - `src/components/*`: reusable UI components
+- `contracts/`: Solidity smart contracts (`HoneyTraceRegistry`, `HoneyTraceRoleControl`)
+- `scripts/network.sh`: network switching and deployment (`local`, `base`, `deploy:local`, `deploy:base`, `deploy:both`, `status`)
 - `scripts/localhost.sh`: local orchestration (`up`, `down`, `check`)
 - `scripts/contracts/*`: deploy and ABI sync scripts
-- `deployments/addresses.json`: contract address registry
+- `deployments/addresses.json`: contract address registry per network
 
 ## Prerequisites
 
 - Node.js 20+
 - npm 10+
 - Docker (for local MongoDB)
+- A funded Base Sepolia wallet (for testnet deployment)
 
 ## Environment Setup
 
@@ -40,25 +44,38 @@ npm install
 cp .env.example .env.local
 ```
 
-3. Make sure these values exist in `.env.local`:
+3. Configure `.env.local` for your target network:
+
+**For Base Sepolia (default):**
 
 ```bash
 MONGODB_URI=mongodb://127.0.0.1:27017/honeytrace
 JWT_SECRET=change-me-local
 LOCAL_RPC_URL=http://127.0.0.1:8545
-BLOCKCHAIN_RPC_URL=http://127.0.0.1:8545
-DEPLOYER_PRIVATE_KEY=
-BLOCKCHAIN_RELAYER_PRIVATE_KEY=
-HONEYTRACE_CONTRACT_ADDRESS=
-NEXT_PUBLIC_HONEYTRACE_CONTRACT=
+BLOCKCHAIN_RPC_URL=https://sepolia.base.org
+BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
+DEPLOYER_PRIVATE_KEY=<your-funded-base-sepolia-private-key>
+BLOCKCHAIN_RELAYER_PRIVATE_KEY=<same-or-different-key>
+HONEYTRACE_CONTRACT_ADDRESS=<filled-after-deploy>
+NEXT_PUBLIC_HONEYTRACE_CONTRACT=<filled-after-deploy>
 NEXT_PUBLIC_MIN_BALANCE_ETH=0.002
 ```
 
+**For localhost (Hardhat):**
+
+```bash
+BLOCKCHAIN_RPC_URL=http://127.0.0.1:8545
+DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+```
+
+Or use the network switching script to toggle between them (see below).
+
 Notes:
 - `scripts/localhost.sh up` auto-fills local relayer key and contract address after deploy.
-- `NEXT_PUBLIC_HONEYTRACE_CONTRACT` is updated by ABI sync/deploy workflows.
+- `scripts/network.sh` switches all env vars between localhost and Base Sepolia.
+- `NEXT_PUBLIC_HONEYTRACE_CONTRACT` is updated by `npm run chain:sync` after deploy.
 
-## Quick Start (Recommended)
+## Quick Start — Local Hardhat
 
 Run the full local stack with one command:
 
@@ -82,6 +99,46 @@ Stop local stack:
 npm run local:down
 ```
 
+## Quick Start — Base Sepolia
+
+1. Fund your deployer wallet with Base Sepolia ETH (see [Accounts to Fund](#accounts-to-fund)).
+
+2. Switch to Base Sepolia and deploy:
+
+```bash
+npm run net:deploy:base
+```
+
+3. Start MongoDB and seed:
+
+```bash
+npm run db:up
+npm run seed
+```
+
+4. Start the app:
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:3000`. Connect MetaMask to Base Sepolia (chain ID 84532).
+
+## Network Switching
+
+Switch between localhost (Hardhat) and Base Sepolia without manually editing `.env.local`:
+
+```bash
+npm run net:local          # switch to localhost
+npm run net:base           # switch to Base Sepolia
+npm run net:deploy:local   # deploy contract + switch to localhost
+npm run net:deploy:base    # deploy contract + switch to Base Sepolia
+npm run net:deploy:both    # deploy to both networks
+npm run net:status         # show current network config
+```
+
+The script reads the deployer key from `.env.production.local` when switching to Base Sepolia, and uses the default Hardhat account #0 for localhost.
+
 ## Manual Start (Step-by-Step)
 
 Use this when you need more control over services:
@@ -92,7 +149,7 @@ Use this when you need more control over services:
 npm run db:up
 ```
 
-2. Start chain:
+2. Start chain (skip if using Base Sepolia):
 
 ```bash
 npm run chain:node
@@ -101,7 +158,7 @@ npm run chain:node
 3. In a new terminal, deploy contracts:
 
 ```bash
-npm run chain:deploy:local
+npm run chain:deploy:local   # or chain:deploy:base for Base Sepolia
 npm run chain:sync
 ```
 
@@ -119,25 +176,37 @@ npm run dev
 
 ## Scripts
 
-- `npm run dev`: start Next.js dev server
-- `npm run build`: production build
-- `npm run start`: run production server
-- `npm run lint`: ESLint
-- `npm run seed`: reset/seed local database
-- `npm run chain:compile`: compile Solidity contracts
-- `npm run chain:test`: run Hardhat tests
-- `npm run chain:node`: local JSON-RPC chain
-- `npm run chain:deploy:local`: deploy to localhost
-- `npm run chain:deploy:base`: deploy to Base Sepolia
-- `npm run chain:sync`: sync ABI/address artifacts into app
-- `npm run db:up`: start MongoDB container
-- `npm run db:down`: stop MongoDB container
-- `npm run local:up`: boot full local development stack
-- `npm run local:down`: stop local stack
-- `npm run local:check`: chain tests + unit tests + build
-- `npm run test:unit`: run Vitest suites
-- `npm run test:e2e`: run Playwright tests
-- `npm run test:all`: chain + unit + e2e test pipeline
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start Next.js dev server |
+| `npm run build` | Production build |
+| `npm run start` | Run production server |
+| `npm run lint` | ESLint |
+| `npm run seed` | Reset/seed local database |
+| **Chain** | |
+| `npm run chain:compile` | Compile Solidity contracts |
+| `npm run chain:test` | Run Hardhat tests |
+| `npm run chain:node` | Start local JSON-RPC chain |
+| `npm run chain:deploy:local` | Deploy to localhost |
+| `npm run chain:deploy:base` | Deploy to Base Sepolia |
+| `npm run chain:sync` | Sync ABI/address artifacts into app |
+| **Network** | |
+| `npm run net:local` | Switch `.env.local` to localhost |
+| `npm run net:base` | Switch `.env.local` to Base Sepolia |
+| `npm run net:deploy:local` | Deploy + switch to localhost |
+| `npm run net:deploy:base` | Deploy + switch to Base Sepolia |
+| `npm run net:deploy:both` | Deploy to both networks |
+| `npm run net:status` | Show current network config |
+| **Infrastructure** | |
+| `npm run db:up` | Start MongoDB container |
+| `npm run db:down` | Stop MongoDB container |
+| `npm run local:up` | Boot full local development stack |
+| `npm run local:down` | Stop local stack |
+| `npm run local:check` | Chain tests + unit tests + build |
+| **Testing** | |
+| `npm run test:unit` | Run Vitest suites |
+| `npm run test:e2e` | Run Playwright tests |
+| `npm run test:all` | Chain + unit + e2e test pipeline |
 
 ## Testing
 
@@ -162,31 +231,82 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
+## Seeded Accounts
+
+After running `npm run seed`, these accounts are available (all passwords `password123` except admin):
+
+| Email | Role | Password |
+|-------|------|----------|
+| `farmer@honeytrace.gov` | farmer | `password123` |
+| `warehouse@honeytrace.gov` | warehouse | `password123` |
+| `lab@honeytrace.gov` | lab | `password123` |
+| `officer@honeytrace.gov` | officer | `password123` |
+| `enterprise@honeytrace.gov` | enterprise | `password123` |
+| `consumer@honeytrace.gov` | consumer | `password123` |
+| `secretary@honeytrace.gov` | secretary | `password123` |
+| `admin@honeytrace.gov` | admin | `Admin@password123` |
+
 ## Multi-Role Flow
 
-The E2E flow validates role transitions across:
-- Farmer
-- Warehouse
-- Lab
-- Officer
-- Enterprise
-- Consumer
-- Secretary
+The supply chain flow validates role transitions across:
+- **Farmer** creates batches (harvest entry)
+- **Warehouse** receives and stores batches
+- **Lab** tests samples and publishes results
+- **Officer** audits and can initiate recalls
+- **Enterprise** tracks dispatched batches
+- **Consumer** traces and verifies batch authenticity (public)
+- **Secretary** manages user KYC approvals
+
+On-chain anchoring happens automatically at key status transitions (`in_warehouse`, `certified`, `dispatched`, `recalled`) and when lab results are published.
 
 ## UX Notes
 
 Transaction hash/ID copy controls are available in dashboard and traceability surfaces where hash-like values are shown (lab, officer, enterprise, onboarding receipt, certificate modal).
 
+## Smart Contract
+
+`HoneyTraceRegistry.sol` extends `HoneyTraceRoleControl.sol` (RBAC with ADMIN, RECORDER, OFFICER roles).
+
+Key functions:
+- `recordBatch(batchId, dataHash, bizStep, location)` — anchor batch data on-chain
+- `linkLabResult(batchId, labHash)` — anchor lab results
+- `initRecall(batchId, tier, reason)` — initiate a recall
+- `getBatch(batchId)` / `getBatchDetails(batchId)` — read on-chain records
+- `isRecalled(batchId)` — check recall status
+
+The deployer automatically receives all roles (ADMIN, RECORDER, OFFICER). If using a separate relayer key, grant roles via `grantRole(address, roleId)`.
+
+### Current Deployments
+
+| Network | Contract Address | Chain ID |
+|---------|-----------------|----------|
+| Base Sepolia | `0x2D85452bed2DE0613E09a8CC2d9C0e4beC26D8b6` | 84532 |
+| Localhost | varies per deploy | 31337 |
+
+Run `npm run net:status` to see current deployment addresses.
+
+## Accounts to Fund
+
+For Base Sepolia deployment, fund these wallets with test ETH:
+
+1. **Deployer** (`DEPLOYER_PRIVATE_KEY`) — deploys the contract, becomes owner with all roles. Needs ~0.01 ETH.
+2. **Relayer** (`BLOCKCHAIN_RELAYER_PRIVATE_KEY`) — server-side account that anchors batches, lab results, and recalls. Needs ~0.05+ ETH for ongoing gas. Can be the same key as deployer.
+3. **MetaMask wallets** (optional) — browser wallets that interact with the contract directly. The app warns when balance drops below `NEXT_PUBLIC_MIN_BALANCE_ETH` (default 0.002 ETH).
+
+Faucets: [Alchemy Base Sepolia Faucet](https://www.alchemy.com/faucets/base-sepolia), [Superchain Faucet](https://app.optimism.io/faucet).
+
 ## Troubleshooting
 
 - `401/400` from auth API: verify Mongo is up and seed completed.
-- Contract write errors: verify `HONEYTRACE_CONTRACT_ADDRESS` and relayer key values in `.env.local`.
+- Contract write errors: verify `HONEYTRACE_CONTRACT_ADDRESS` and relayer key values in `.env.local`. Run `npm run net:status` to check.
 - Frontend cannot find contract: run `npm run chain:sync` and restart dev server.
+- RPC timeouts: the public `https://sepolia.base.org` can be rate-limited. Use an Alchemy or Infura free-tier RPC for reliability.
 - Port conflicts:
 	- app uses `3000`
 	- hardhat uses `8545`
 	- mongo uses `27017`
 - Playwright browser missing: run `npx playwright install chromium`.
+- Wrong network: run `npm run net:status` to see which network `.env.local` is configured for, then `npm run net:local` or `npm run net:base` to switch.
 
 ## Production Build
 
