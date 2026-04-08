@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 import {
   Tile,
   Button,
@@ -73,6 +74,7 @@ function validateLabForm(v: LabFormValues): Record<string, string> {
 }
 
 export default function LabDashboard() {
+  const currentUser = useCurrentUser();
   const tOnboarding = useTranslations('Onboarding.lab');
   const tDashboard = useTranslations('Dashboard.lab');
   const { isTourOpen, isKYCOpen, completeKYC, completeTour, closeTour } = useOnboarding({ role: 'lab', hasKYC: true });
@@ -88,6 +90,7 @@ export default function LabDashboard() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [serverViolations, setServerViolations] = useState<string[]>([]);
+  const formRootRef = React.useRef<HTMLDivElement | null>(null);
 
   const tourSteps = [
     { label: tOnboarding('step1_title'), title: tOnboarding('step1_title'), description: tOnboarding('step1_desc') },
@@ -134,7 +137,7 @@ export default function LabDashboard() {
       await labApi.publish({
         batchId:        selectedBatchId,
         sampleId:       `LAB-${Date.now()}`,
-        labId:          'L-001',
+        labId:          currentUser.userId,
         fssaiLicense:   form.fssaiLicense,
         nablCert:       form.nablCert,
         moisture:       parseFloat(form.moisture),
@@ -170,8 +173,18 @@ export default function LabDashboard() {
     }
   };
 
+  const handleNewSample = () => {
+    const firstPending = pendingBatches.find((b) => !alreadyPublished(b.id));
+    setSelectedBatchId(firstPending?.id ?? '');
+    setForm(EMPTY_FORM);
+    setFormErrors({});
+    setPublishError(null);
+    setServerViolations([]);
+    formRootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   const headerActions = (
-    <Button kind="primary" renderIcon={Add}>{tDashboard('new_sample')}</Button>
+    <Button kind="primary" renderIcon={Add} onClick={handleNewSample}>{tDashboard('new_sample')}</Button>
   );
 
   const pageHeader = (
@@ -232,7 +245,7 @@ export default function LabDashboard() {
       {/* Lab Workflow */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-spacing-lg">
         <div className="flex flex-col gap-spacing-lg">
-          <Tile className="glass-panel p-spacing-xl rounded-2xl shadow-xl elevation-premium">
+          <Tile className="glass-panel p-spacing-xl rounded-2xl shadow-xl elevation-premium" ref={formRootRef}>
             <h3 className="text-h3 flex items-center gap-4 mb-spacing-lg">
               <div className="p-2 bg-primary/10 rounded-lg text-primary"><DataAnalytics size={24} /></div>
               {tDashboard('analysis_hub')}
@@ -433,3 +446,4 @@ export default function LabDashboard() {
     </UnifiedDashboardLayout>
   );
 }
+

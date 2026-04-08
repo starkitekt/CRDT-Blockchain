@@ -16,21 +16,29 @@ interface UseBatchesResult {
  * Call `refresh()` after mutations to re-sync.
  */
 export function useBatches(params?: BatchListParams): UseBatchesResult {
+  const farmerId = params?.farmerId;
+  const status = params?.status;
+
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
   const [tick, setTick]       = useState(0);
 
-  const refresh = useCallback(() => setTick((n) => n + 1), []);
+  const refresh = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    setTick((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
 
     batchesApi
-      .list(params)
-      .then(({ data }) => {
+      .list({ farmerId, status })
+      .then((res) => {
+        const data = Array.isArray((res as { data?: Batch[] }).data)
+          ? (res as { data: Batch[] }).data
+          : (Array.isArray(res) ? (res as Batch[]) : []);
         if (!cancelled) {
           setBatches(data);
           setLoading(false);
@@ -44,8 +52,7 @@ export function useBatches(params?: BatchListParams): UseBatchesResult {
       });
 
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick, params?.farmerId, params?.status]);
+  }, [tick, farmerId, status]);
 
   return { batches, loading, error, refresh };
 }

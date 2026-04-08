@@ -10,7 +10,7 @@ export const CreateRecallSchema = z.object({
   reason:       z.string().min(1, 'reason is required'),
   affectedKg:   z.number({ error: 'affectedKg must be a number' })
                  .positive('affectedKg must be positive'),
-  initiatedBy:  z.string().min(1, 'initiatedBy is required'),
+  initiatedBy: z.string().optional(),
   onChainTxHash:z.string().optional(),
 });
 

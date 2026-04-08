@@ -4,34 +4,39 @@ import React, { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import {
-  Tile,
-  Button,
-  TextInput,
-  Stack,
-  ProgressBar,
-  Tag,
-  InlineNotification,
+  Tile, Button, TextInput, Stack, Tag, InlineNotification,
 } from '@carbon/react';
-import { QrCode, CheckmarkFilled, Delivery, Location, View, Search, Flash, Tree, IbmCloudSecurityComplianceCenter as Security } from '@carbon/icons-react';
+import {
+  QrCode, CheckmarkFilled, Search,
+  IbmCloudSecurityComplianceCenter as Security,
+} from '@carbon/icons-react';
 import GuidedTour from '@/components/Onboarding/GuidedTour';
 import PriorStepQR from '@/components/Traceability/PriorStepQR';
+import QRScanner from '@/components/Traceability/QRScanner';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
 import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
 import BlockchainCertificate from '@/components/Traceability/BlockchainCertificate';
 import CTETimeline, { CTEEvent } from '@/components/Traceability/CTETimeline';
-import Image from 'next/image';
 import { batchesApi, labApi, ApiError } from '@/lib/api';
 
+type TFn = (...args: unknown[]) => string;
+
 export default function ConsumerPortal() {
-  const tOnboarding = useTranslations('Onboarding.consumer');
-  const tDashboard = useTranslations('Dashboard.consumer');
-  const tc = useTranslations('common');
-  const [searchId, setSearchId] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [showResult, setShowResult] = useState(false);
+  const tOnboarding = useTranslations('Onboarding.consumer') as unknown as TFn;
+  const tDashboard  = useTranslations('Dashboard.consumer') as unknown as TFn;
+  const tc          = useTranslations('common') as unknown as TFn;
+
+  const [searchId, setSearchId]               = useState('');
+  const [isSearching, setIsSearching]         = useState(false);
+  const [showResult, setShowResult]           = useState(false);
   const [isCertificateOpen, setIsCertificateOpen] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [labWarning, setLabWarning] = useState<string | null>(null);
+  const [searchError, setSearchError]         = useState<string | null>(null);
+  const [labWarning, setLabWarning]           = useState<string | null>(null);
+  const [batchData, setBatchData]             = useState<Record<string, unknown> | null>(null);
+  const [labData, setLabData]                 = useState<Record<string, unknown> | null>(null);
+  const [traceTimeline, setTraceTimeline]     = useState<Array<Record<string, unknown>>>([]);
+  const [showScanner, setShowScanner]         = useState(false);
+
   const { isTourOpen, completeTour, closeTour } = useOnboarding({ role: 'consumer' });
 
   const tourSteps = [
@@ -40,24 +45,38 @@ export default function ConsumerPortal() {
     { label: tOnboarding('step3_title'), title: tOnboarding('step3_title'), description: tOnboarding('step3_desc') },
   ];
 
-  const handleSearch = async () => {
+  // ── accepts optional overrideId so QR scan can pass directly ──────────────
+  const handleSearch = async (overrideId?: string) => {
+    const id = overrideId ?? searchId;
+    if (!id.trim()) return;
+
     setIsSearching(true);
     setSearchError(null);
     setLabWarning(null);
     setShowResult(false);
+    setBatchData(null);
+    setLabData(null);
+    setTraceTimeline([]);
 
     try {
-      // Fetch batch — throws ApiError with status 404 if not found
-      await batchesApi.get(searchId);
+      const batch = await batchesApi.get(id);
+      setBatchData(batch as Record<string, unknown>);
 
-      // Fetch lab result — 404 means not yet published, handle gracefully
       try {
-        await labApi.getByBatch(searchId);
+        const traceRes = await fetch(`/api/trace/${id}`);
+        if (traceRes.ok) {
+          const tr = await traceRes.json();
+          setTraceTimeline(tr.timeline ?? []);
+        }
+      } catch { /* non-fatal */ }
+
+      try {
+        const lab = await labApi.getByBatch(id);
+        setLabData(lab as Record<string, unknown>);
       } catch (labErr) {
         if (labErr instanceof ApiError && labErr.status === 404) {
           setLabWarning('Lab results are not yet available for this batch.');
         } else {
-          // Non-404 lab errors are non-fatal; surface as warning
           setLabWarning('Lab results could not be loaded at this time.');
         }
       }
@@ -65,9 +84,9 @@ export default function ConsumerPortal() {
       setShowResult(true);
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
-        setSearchError(`Batch "${searchId}" was not found. Please check the ID and try again.`);
+        setSearchError(`Batch "${id}" was not found. Please check the ID and try again.`);
       } else if (err instanceof ApiError) {
-        setSearchError(err.message);
+        setSearchError((err as ApiError).message);
       } else {
         setSearchError('An unexpected error occurred. Please try again.');
       }
@@ -76,60 +95,53 @@ export default function ConsumerPortal() {
     }
   };
 
-  const cteEvents: CTEEvent[] = [
-    {
-      bizStep: 'urn:epcglobal:cbv:bizstep:harvesting',
-      label: 'Harvesting',
-      location: 'Siwan Mustard Fields, Bihar (GLN: 8901234567890)',
-      eventTime: '2024-03-10T06:30:00Z',
-      status: 'completed',
-      disposition: 'active',
-      actor: 'Ramesh Kumar (Farmer ID: NBHM-2024-881)',
-    },
-    {
-      bizStep: 'urn:epcglobal:cbv:bizstep:storing',
-      label: 'Cold Storage Receipt',
-      location: 'Siwan Regional Godown #4 (GLN: 8901234567891)',
-      eventTime: '2024-03-10T14:15:00Z',
-      status: 'completed',
-      disposition: 'in_transit',
-      actor: 'Warehouse Node #WH-442',
-    },
-    {
-      bizStep: 'urn:epcglobal:cbv:bizstep:sampling',
-      label: 'Lab Sampling',
-      location: 'NABL Regional Lab #04, Jabalpur (GLN: 8901234567892)',
-      eventTime: '2024-03-11T09:00:00Z',
-      status: 'completed',
-      disposition: 'in_progress',
-      actor: 'Lab Node #L-401',
-    },
-    {
-      bizStep: 'urn:epcglobal:cbv:bizstep:inspecting',
-      label: 'Government Quality Certification',
-      location: 'State Audit Secretariat, Bhopal (GLN: 8901234567893)',
-      eventTime: '2024-03-12T11:30:00Z',
-      status: 'completed',
-      disposition: 'conformant',
-      actor: 'GOVT-OFC-04',
-    },
-    {
-      bizStep: 'urn:epcglobal:cbv:bizstep:shipping',
-      label: 'Enterprise Dispatch',
-      location: 'Regional Distribution Hub, Delhi (GLN: 8901234567894)',
-      eventTime: '2024-03-13T08:00:00Z',
-      status: 'completed',
-      disposition: 'in_transit',
-      actor: 'GreenChain Logistics',
-    },
-    {
-      bizStep: 'urn:epcglobal:cbv:bizstep:retail_selling',
-      label: 'Consumer Sale',
-      location: 'End Consumer',
-      status: 'active',
-      disposition: 'active',
-    },
-  ];
+  const BIZ_STEP_MAP: Record<string, string> = {
+    harvest:       'urn:epcglobal:cbv:bizstep:harvesting',
+    warehousing:   'urn:epcglobal:cbv:bizstep:storing',
+    in_warehouse:  'urn:epcglobal:cbv:bizstep:storing',
+    lab_submission:'urn:epcglobal:cbv:bizstep:sampling',
+    lab_certified: 'urn:epcglobal:cbv:bizstep:inspecting',
+    certified:     'urn:epcglobal:cbv:bizstep:inspecting',
+    dispatch:      'urn:epcglobal:cbv:bizstep:shipping',
+    dispatched:    'urn:epcglobal:cbv:bizstep:shipping',
+    recall:        'urn:epcglobal:cbv:bizstep:recall',
+    recalled:      'urn:epcglobal:cbv:bizstep:recall',
+  };
+
+  const cteEvents: CTEEvent[] = traceTimeline.map(e => ({
+    bizStep:    BIZ_STEP_MAP[e.step as string] ?? 'urn:epcglobal:cbv:bizstep:unknown',
+    label:      e.label as string,
+    location:   (e.location as string) ?? 'Location not recorded',
+    eventTime:  e.timestamp as string | undefined,
+    status:     'completed' as const,
+    disposition:'active' as const,
+    actor:      e.actor as string | undefined,
+  }));
+
+  const purityPct: string | null = (() => {
+    if (!labData) return null;
+    if (labData.passed === false) return '< 70.0';
+    if (labData.passed === true) {
+      const moistureScore    = labData.moisture != null
+        ? Math.max(0, 100 - ((labData.moisture as number) / 20) * 30) : 85;
+      const hmfScore         = labData.hmf != null
+        ? Math.max(0, 100 - ((labData.hmf as number) / 40) * 20) : 90;
+      const antibioticPenalty = labData.antibioticPpb != null
+        && (labData.antibioticPpb as number) > 0.05 ? 15 : 0;
+      const composite = (moistureScore * 0.5 + hmfScore * 0.3 + (100 - antibioticPenalty) * 0.2);
+      return Math.min(99.9, Math.max(70, composite)).toFixed(1);
+    }
+    return null;
+  })();
+
+  const stakeholders: string[] = batchData
+    ? [
+        batchData.farmerName         ? `Farmer: ${batchData.farmerName}`                    : null,
+        batchData.warehouseId        ? `Warehouse: ${batchData.warehouseId}`                : null,
+        batchData.labId              ? `Lab: ${batchData.labId}`                            : null,
+        batchData.destinationEnterprise ? `Enterprise: ${batchData.destinationEnterprise}`  : null,
+      ].filter(Boolean) as string[]
+    : [];
 
   const pageHeader = (
     <div className="text-center max-w-2xl mx-auto py-spacing-xl animate-fade-in">
@@ -154,217 +166,194 @@ export default function ConsumerPortal() {
         isOpen={isCertificateOpen}
         onClose={() => setIsCertificateOpen(false)}
         batchId={searchId}
-        stakeholders={['Farmer: Ramesh Kumar', 'Warehouse: Siwan Regional', 'Lab: Bihar State Quality', 'Logistics: GreenChain']}
+        stakeholders={stakeholders}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-spacing-md items-start">
-        {/* Left Column: Purity & Journey */}
-        <div className="lg:col-span-2 space-y-spacing-lg">
-          {/* Main Purity Card */}
-          <Tile className="p-spacing-xl glass-panel border-t-4 border-primary rounded-2xl shadow-2xl relative overflow-hidden group elevation-premium">
-             <div className="absolute right-[-40px] top-[-40px] opacity-5 group-hover:rotate-12 transition-transform duration-700">
-                <Security size={200} />
-             </div>
+      <Stack gap={6}>
 
-             <div className="flex justify-between items-start mb-spacing-xl">
+        {/* ── Search Bar ──────────────────────────────────────────────── */}
+        <Tile className="p-spacing-xl glass-panel rounded-2xl shadow-xl">
+          <Stack gap={4}>
+            <div className="flex items-center gap-spacing-sm">
+              <QrCode size={24} className="text-primary" />
+              <h2 className="text-h2">{tDashboard('search_title')}</h2>
+            </div>
+
+            <div className="flex gap-spacing-md items-end">
+              <div className="flex-1">
+                <TextInput
+                  id="batch-search"
+                  labelText={tDashboard('batch_id_label')}
+                  placeholder="e.g. HT-20260402-001"
+                  value={searchId}
+                  onChange={e => setSearchId(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                />
+              </div>
+
+              {/* Manual search button */}
+              <Button
+                renderIcon={Search}
+                onClick={() => handleSearch()}
+                disabled={!searchId.trim() || isSearching}
+              >
+                {isSearching ? tc('loading') : tDashboard('search_btn')}
+              </Button>
+
+              {/* QR scan toggle button */}
+              <Button
+                kind="tertiary"
+                renderIcon={QrCode}
+                iconDescription="Scan QR Code"
+                hasIconOnly
+                onClick={() => setShowScanner(v => !v)}
+                tooltipPosition="bottom"
+                className={showScanner ? 'ring-2 ring-primary' : ''}
+              />
+            </div>
+
+            {/* Inline QR Scanner */}
+            {showScanner && (
+              <div className="mt-2 p-4 rounded-xl border border-border-subtle bg-background">
+                <p className="text-sm text-muted mb-3 text-center">
+                  Point camera at a HoneyTrace QR code
+                </p>
+                <QRScanner
+                  onResult={(id) => {
+                    setSearchId(id);
+                    setShowScanner(false);
+                    handleSearch(id);   // pass directly — no state race
+                  }}
+                  onError={(err) => setSearchError(`Scanner error: ${err}`)}
+                />
+              </div>
+            )}
+
+            {searchError && (
+              <InlineNotification
+                kind="error"
+                title={tc('error')}
+                subtitle={searchError}
+                hideCloseButton
+              />
+            )}
+          </Stack>
+        </Tile>
+
+        {/* ── Results ─────────────────────────────────────────────────── */}
+        {showResult && batchData && (
+          <Stack gap={6}>
+
+            {labWarning && (
+              <InlineNotification
+                kind="warning"
+                title="Lab Results"
+                subtitle={labWarning}
+                hideCloseButton
+              />
+            )}
+
+            {/* Quality Score */}
+            <Tile className="p-spacing-xl glass-panel rounded-2xl shadow-xl">
+              <div className="grid grid-cols-3 gap-spacing-lg text-center">
                 <div>
-                  <h2 className="text-h1 mb-1">98.2%</h2>
+                  <h2 className="text-h1 mb-1">{purityPct ? `${purityPct}%` : '—'}</h2>
                   <p className="text-caption">{tDashboard('natural_purity')}</p>
                 </div>
-                <div className="text-right">
-                   <Tag type="green" className="m-0 ring-4 ring-success/10 border-none px-4 py-2 font-bold uppercase tracking-widest text-[10px]">{tc('blockchain_verified')}</Tag>
-                   <p className="text-[10px] mt-2 font-mono text-slate-400 uppercase tracking-widest leading-none">ID: {searchId}</p>
-                </div>
-             </div>
-
-             <div className="grid grid-cols-2 lg:grid-cols-4 gap-spacing-md mb-spacing-lg">
-                <div className="p-spacing-sm bg-white rounded border border-slate-100 shadow-sm">
-                   <p className="text-caption text-slate-400 uppercase tracking-tighter mb-1">{tDashboard('pollen_purity')}</p>
-                   <p className="text-body font-bold text-slate-900">94.5%</p>
-                </div>
-                <div className="p-spacing-sm bg-white rounded border border-slate-100 shadow-sm">
-                   <p className="text-caption text-slate-400 uppercase tracking-tighter mb-1">{tDashboard('moisture_label')}</p>
-                   <p className="text-body font-bold text-slate-900">17.2%</p>
-                </div>
-                <div className="p-spacing-sm bg-white rounded border border-slate-100 shadow-sm">
-                   <p className="text-caption text-slate-400 uppercase tracking-tighter mb-1">{tDashboard('diastase_label')}</p>
-                   <p className="text-body font-bold text-slate-900">Active</p>
-                </div>
-                <div className="p-spacing-sm bg-white rounded border border-slate-100 shadow-sm">
-                   <p className="text-caption text-slate-400 uppercase tracking-tighter mb-1">{tDashboard('hmf_label')}</p>
-                   <p className="text-body font-bold text-slate-900">8.4 mg/kg</p>
-                </div>
-             </div>
-
-             <Button
-                kind="primary"
-                onClick={() => setIsCertificateOpen(true)}
-                renderIcon={Flash}
-                className="w-full shadow-2xl h-14 !rounded-xl"
-             >
-                <span className="font-bold tracking-tight">{tDashboard('view_certificate')}</span>
-             </Button>
-          </Tile>
-
-          {/* EPCIS 2.0 Chain of Custody Timeline */}
-          <CTETimeline batchId={searchId} events={cteEvents} />
-
-          {/* Interactive Journey Timeline */}
-          <Tile className="p-spacing-xl glass-panel border-l-4 border-primary rounded-2xl shadow-xl elevation-premium">
-             <div className="flex items-center gap-4 mb-spacing-xl">
-                <div className="p-3 bg-primary/10 rounded-xl text-primary">
-                  <Delivery size={28} />
-                </div>
-                <h3 className="text-h2">{tDashboard('know_origin')}</h3>
-             </div>
-
-             <div className="relative pl-spacing-xl space-y-spacing-xl border-l-[3px] border-slate-100 ml-4">
-                {/* Harvest */}
-                <div className="relative">
-                   <div className="absolute left-[-47px] top-0 p-2.5 bg-amber-500 text-white rounded-2xl ring-8 ring-white shadow-2xl">
-                      <Tree size={20} />
-                   </div>
-                   <div className="flex flex-col md:flex-row gap-spacing-lg">
-                      <div className="flex-1">
-                         <p className="text-caption text-amber-600 mb-2">{tDashboard('harvested_label')}</p>
-                         <p className="text-h3 mb-1">Siwan Mustard Fields</p>
-                         <p className="text-body italic text-slate-400">"Traditional heritage beekeeping."</p>
-                      </div>
-                      <PriorStepQR
-                        stepName="Harvest Unit"
-                        batchId="HNV-2024-001"
-                        details="Mustard Flower | Raw Unprocessed"
-                      />
-                   </div>
-                </div>
-
-                {/* Processing */}
-                <div className="relative">
-                   <div className="absolute left-[-47px] top-0 p-2.5 bg-primary text-white rounded-2xl ring-8 ring-white shadow-2xl">
-                      <Flash size={20} />
-                   </div>
-                   <div className="flex flex-col md:flex-row gap-spacing-lg">
-                      <div className="flex-1">
-                         <p className="text-caption text-primary mb-2">{tDashboard('verified_processed_label')}</p>
-                         <p className="text-h3 mb-1">Siwan Central Hub</p>
-                         <p className="text-body text-slate-400">Multistage cold filtration process.</p>
-                      </div>
-                      <BlockchainMapStamp
-                        latitude="25.9067 N"
-                        longitude="84.3600 E"
-                        locationName="Siwan Hub"
-                        utcTime="2024-03-12 08:30"
-                      />
-                   </div>
-                </div>
-             </div>
-          </Tile>
-        </div>
-
-        {/* Right Column: Search, Story & Impact */}
-        <div className="space-y-spacing-lg">
-          {/* Purity Hub / Search */}
-          <Tile className="p-spacing-xl glass-panel border-b-4 border-success rounded-2xl shadow-xl elevation-premium">
-             <div className="flex items-center gap-3 mb-spacing-lg">
-                <QrCode size={28} className="text-success" />
-                <h4 className="text-caption text-success">{tDashboard('purity_hub')}</h4>
-             </div>
-
-             <div className="space-y-6">
-                <div className="flex flex-col gap-4">
-                   <TextInput
-                      id="batch-search"
-                      labelText=""
-                      placeholder={tDashboard('search_placeholder')}
-                      value={searchId}
-                      onChange={(e) => setSearchId(e.target.value)}
-                      size="lg"
-                      className="!bg-slate-50 !border-slate-100 focus:!border-primary transition-all !rounded-xl"
-                   />
-                   <div className="flex gap-3">
-                      <Button
-                        kind="primary"
-                        onClick={handleSearch}
-                        disabled={isSearching}
-                        className="flex-1 h-14 !rounded-xl"
-                        size="lg"
-                      >
-                        <span className="font-bold">{isSearching ? tDashboard('searching') : tDashboard('search_label')}</span>
-                      </Button>
-                      <Button
-                        hasIconOnly
-                        renderIcon={QrCode}
-                        iconDescription={tc('scan_qr')}
-                        kind="secondary"
-                        size="lg"
-                        className="h-14 !rounded-xl"
-                      />
-                   </div>
-                   {searchError && (
-                     <InlineNotification kind="error" title="Batch not found" subtitle={searchError} lowContrast hideCloseButton />
-                   )}
-                   {labWarning && !searchError && (
-                     <InlineNotification kind="warning" title="Lab results pending" subtitle={labWarning} lowContrast hideCloseButton />
-                   )}
-                </div>
-             </div>
-          </Tile>
-
-          {/* Farmer Story */}
-          <Tile className="!p-0 overflow-hidden shadow-2xl group rounded-2xl border-none elevation-premium">
-             <div className="relative h-64 overflow-hidden bg-slate-200">
-                <Image
-                  src="/honey_harvest_premium.png"
-                  alt="Farmer Ramesh Kumar harvesting honey in Siwan, Bihar"
-                  fill
-                  className="object-cover group-hover:scale-105 transition-transform duration-[2000ms]"
-                  unoptimized
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent flex items-end p-spacing-lg">
-                   <div>
-                      <h3 className="text-white font-bold text-2xl mb-1">Ramesh Kumar</h3>
-                      <p className="text-primary text-[10px] uppercase font-extrabold tracking-[0.2em]">Siwan, Bihar</p>
-                   </div>
-                </div>
-             </div>
-             <div className="p-spacing-lg bg-slate-950">
-                <p className="text-body text-slate-400 italic mb-spacing-lg leading-relaxed">
-                   "Harvested from the deep mustard fields of Siwan. This batch supported 12 local beekeeping families."
-                </p>
-                <div className="flex items-center gap-3 text-[10px] font-bold text-primary uppercase tracking-widest">
-                   <Location size={16} />
-                   {tDashboard('verified_farm_origin')}
-                </div>
-             </div>
-          </Tile>
-
-          {/* Sustainability Impact */}
-          <Tile className="p-spacing-xl glass-panel border-l-4 border-primary rounded-2xl shadow-xl elevation-premium">
-             <div className="flex items-center gap-4 mb-spacing-lg">
-                <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                  <Tree size={28} />
-                </div>
-                <h4 className="text-caption text-primary">{tDashboard('sustainability')}</h4>
-             </div>
-             <div className="space-y-6">
                 <div>
-                   <div className="flex justify-between items-end mb-3">
-                      <p className="text-[10px] text-slate-500 uppercase tracking-widest">{tDashboard('carbon_offset')}</p>
-                      <p className="text-h2 text-slate-900">2.4kg</p>
-                   </div>
-                   <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div className="bg-primary h-full w-[65%] rounded-full shadow-[0_0_8px_rgba(15,98,254,0.4)]" />
-                   </div>
+                  <h2 className="text-h1 mb-1">{String(batchData.grade ?? '—')}</h2>
+                  <p className="text-caption">{tDashboard('quality_grade')}</p>
                 </div>
-                <p className="text-[11px] text-slate-400 italic leading-relaxed">{tDashboard('impact_desc')}</p>
-             </div>
-          </Tile>
-        </div>
-      </div>
+                <div>
+                  <h2 className="text-h1 mb-1">{String(batchData.floraType ?? '—')}</h2>
+                  <p className="text-caption">{tDashboard('flora_type')}</p>
+                </div>
+              </div>
 
-        <footer className="text-center text-caption py-spacing-xl" style={{ color: 'var(--text-secondary)' }}>
-          {tDashboard('footer_powered')}
-        </footer>
+              {labData && (
+                <div className="mt-spacing-md grid grid-cols-3 gap-spacing-sm text-center border-t border-[var(--cds-border-subtle)] pt-spacing-md">
+                  <div>
+                    <p className="text-xs text-muted">Moisture</p>
+                    <p className="font-semibold tabular-nums">{labData.moisture != null ? `${labData.moisture}%` : '—'}</p>
+                    <p className="text-xs text-muted">max 20%</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">HMF</p>
+                    <p className="font-semibold tabular-nums">{labData.hmf != null ? `${labData.hmf} mg/kg` : '—'}</p>
+                    <p className="text-xs text-muted">max 40 mg/kg</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">Diastase</p>
+                    <p className="font-semibold tabular-nums">{labData.diastase != null ? `${labData.diastase} DN` : '—'}</p>
+                    <p className="text-xs text-muted">min 8 DN</p>
+                  </div>
+                </div>
+              )}
+            </Tile>
+
+            {/* Batch Details */}
+            <Tile className="p-spacing-xl glass-panel rounded-2xl shadow-xl">
+              <h3 className="text-h3 mb-spacing-md">{tDashboard('batch_details')}</h3>
+              <div className="grid grid-cols-2 gap-spacing-md text-sm">
+                <div>
+                  <span className="text-muted">{tDashboard('farmer')}: </span>
+                  <strong>{String(batchData.farmerName ?? '—')}</strong>
+                </div>
+                <div>
+                  <span className="text-muted">{tDashboard('weight')}: </span>
+                  <strong>{String(batchData.weightKg ?? '—')} kg</strong>
+                </div>
+                <div>
+                  <span className="text-muted">{tDashboard('harvest_date')}: </span>
+                  <strong>
+                    {batchData.harvestDate
+                      ? new Date(String(batchData.harvestDate)).toLocaleDateString('en-IN')
+                      : '—'}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-muted">{tDashboard('moisture')}: </span>
+                  <strong>{String(batchData.moisturePct ?? '—')}%</strong>
+                </div>
+              </div>
+            </Tile>
+
+            {/* Harvest Location Map */}
+            {Boolean(batchData.latitude) && Boolean(batchData.longitude) && (
+              <BlockchainMapStamp
+                locationName={(batchData.locationName as string | undefined) ?? 'Harvest Location'}
+                latitude={batchData.latitude as string}
+                longitude={batchData.longitude as string}
+                utcTime={(batchData.harvestDate as string | undefined) ?? new Date().toISOString()}
+              />
+            )}
+
+            {/* EPCIS 2.0 CTE Timeline */}
+            {cteEvents.length > 0 && (
+              <CTETimeline batchId={searchId} events={cteEvents} />
+            )}
+
+            {/* QR Prior Step display tile */}
+            <PriorStepQR
+              stepName="Harvest Unit"
+              batchId={searchId}
+              details={`${String(batchData.floraType ?? 'Honey')} | ${String(batchData.grade ?? '')} Grade`}
+            />
+
+            {/* Blockchain Certificate button */}
+            <Button
+              kind="ghost"
+              renderIcon={CheckmarkFilled}
+              onClick={() => setIsCertificateOpen(true)}
+              className="w-full justify-center"
+            >
+              View Blockchain Certificate
+            </Button>
+
+          </Stack>
+        )}
+
+      </Stack>
     </UnifiedDashboardLayout>
   );
 }

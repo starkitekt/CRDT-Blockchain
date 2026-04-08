@@ -5,7 +5,6 @@ import { useTranslations } from 'next-intl';
 import {
   Tile,
   Button,
-  DataTable,
   TableContainer,
   Table,
   TableHead,
@@ -21,8 +20,9 @@ import {
   InlineNotification,
   DataTableSkeleton,
 } from '@carbon/react';
-import { Add, Sun, Chemistry, Growth, Location, QrCode } from '@carbon/icons-react';
+import { Add, Sun, Chemistry, Growth, Location } from '@carbon/icons-react';
 import { useOnboarding } from '@/hooks/useOnboarding';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useBatches } from '@/hooks/useBatches';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { batchesApi, ApiError } from '@/lib/api';
@@ -33,17 +33,17 @@ import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
 import PriorStepQR from '@/components/Traceability/PriorStepQR';
 import EmptyState from '@/components/EmptyState';
 
-// Demo farmer ID — in production read from session/cookie
-const FARMER_ID = 'F-001';
 
-export default function FarmerDashboard({ params }: { params: Promise<{ locale: string }> }) {
+export default function FarmerDashboard({
+  params }: { params: Promise<{ locale: string }> }) {
+  const currentUser = useCurrentUser();
   const { locale } = React.use(params);
   const t = useTranslations('Dashboard.farmer');
   const tTour = useTranslations('Onboarding.farmer');
   const { isTourOpen, isKYCOpen: isOnboardingOpen, completeKYC: completeOnboarding, completeTour, closeTour } = useOnboarding({ role: 'farmer', hasKYC: true });
 
   // ── Data ──────────────────────────────────────────────────────────────────
-  const { batches, loading, error: fetchError, refresh } = useBatches({ farmerId: FARMER_ID });
+  const { batches, loading, error: fetchError, refresh } = useBatches({ farmerId:   currentUser.userId });
   const { notifications: syncNotifs, dismiss: dismissSync } = useOfflineSync();
 
   // ── Modal / form state ────────────────────────────────────────────────────
@@ -62,6 +62,9 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
   const [gpsLat, setGpsLat] = useState('22.8465');
   const [gpsLng, setGpsLng] = useState('81.3340');
   const [gpsError, setGpsError] = useState('');
+  const [weatherTemp, setWeatherTemp] = useState<number | null>(null);
+  const [weatherHumidity, setWeatherHumidity] = useState<number | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -91,6 +94,37 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
+  useEffect(() => {
+    if (!gpsReady) return;
+    let cancelled = false;
+    setWeatherLoading(true);
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${gpsLat}&longitude=${gpsLng}&current=temperature_2m,relative_humidity_2m`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Failed to fetch weather');
+        return res.json() as Promise<{
+          current?: {
+            temperature_2m?: number;
+            relative_humidity_2m?: number;
+          };
+        }>;
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setWeatherTemp(typeof data.current?.temperature_2m === 'number' ? data.current.temperature_2m : null);
+        setWeatherHumidity(typeof data.current?.relative_humidity_2m === 'number' ? data.current.relative_humidity_2m : null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setWeatherTemp(null);
+        setWeatherHumidity(null);
+      })
+      .finally(() => {
+        if (!cancelled) setWeatherLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [gpsReady, gpsLat, gpsLng]);
+
   // ── Tour ──────────────────────────────────────────────────────────────────
   const tourSteps = [
     { label: tTour('step1_title'), title: tTour('step1_title'), description: tTour('step1_desc') },
@@ -118,8 +152,8 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
 
     try {
       await batchesApi.create({
-        farmerId:   FARMER_ID,
-        farmerName: 'Ramesh Kumar',
+        farmerId:   currentUser.userId,
+        farmerName: currentUser.name,
         floraType,
         weightKg:   weight,
         moisturePct: moistureValue,
@@ -147,6 +181,7 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
   const totalWeight = batches.reduce((s, b) => s + b.weightKg, 0);
   const safeWeight  = isNaN(weight) || weight < 0 ? 0 : weight;
   const estimatedValue = (safeWeight * (grade === 'A' ? 450 : 380)).toLocaleString('en-IN');
+  const latestBatch = batches[0];
 
   const statusTagType = (status: string) => {
     if (status === 'certified')   return 'green';
@@ -175,7 +210,7 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
     <UnifiedDashboardLayout header={pageHeader}>
       {isOnboardingOpen && (
         <SimplifiedFarmerOnboarding
-          farmerName="Ramesh Kumar"
+          farmerName={currentUser.name}
           onCompleteAction={completeOnboarding}
         />
       )}
@@ -268,7 +303,9 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
               <Sun size={120} />
             </div>
             <p className="text-caption mb-spacing-md">{t('weather_title')}</p>
-            <h3 className="text-h2">28°C / 42% RH</h3>
+            <h3 className="text-h2">
+              {weatherLoading ? '…' : weatherTemp == null || weatherHumidity == null ? '— / —' : `${weatherTemp.toFixed(1)}°C / ${weatherHumidity.toFixed(0)}% RH`}
+            </h3>
             <div className="mt-spacing-lg">
               <Tag type="green" className="!m-0 px-3 font-bold uppercase tracking-widest text-[10px]">{t('weather_sunny')}</Tag>
               <p className="text-[10px] font-bold text-success uppercase mt-2">{t('weather_ideal')}</p>
@@ -310,7 +347,7 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
           />
           <PriorStepQR
             stepName={t('prior_step_name')}
-            batchId="REG-2024-001"
+            batchId={latestBatch?.batchId || latestBatch?.id || '--'}
             details={t('prior_step_desc')}
           />
         </div>
@@ -374,3 +411,4 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
     </UnifiedDashboardLayout>
   );
 }
+

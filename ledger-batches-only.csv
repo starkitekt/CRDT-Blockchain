@@ -1,0 +1,15 @@
+timestamp,entityType,entityId,action,actorRole,actorUserId,metadata
+2026-04-04T16:32:21.869Z,batch,HT-20260404-010,trace_viewed,consumer,public,{"tamperProof":true;"onChain":true}
+2026-04-04T16:30:05.318Z,batch,HT-20260404-010,trace_viewed,consumer,public,{"tamperProof":true;"onChain":true}
+2026-04-04T16:26:19.919Z,batch,HT-20260404-010,trace_viewed,consumer,public,{"tamperProof":true;"onChain":true}
+2026-04-04T16:21:55.793Z,batch,HT-20260404-010,trace_viewed,consumer,public,{"tamperProof":true;"onChain":true}
+2026-04-04T16:20:35.087Z,batch,HT-20260404-010,trace_viewed,consumer,public,{"tamperProof":true;"onChain":true}
+2026-04-04T16:13:57.466Z,batch,HT-20260404-010,trace_viewed,consumer,public,{"tamperProof":false;"onChain":true}
+2026-04-04T16:12:26.278Z,batch,HT-20260404-010,patch,officer,69d138611636c48127064712,{"before":{"batchId":"HT-20260404-010";"farmerId":"69d12981ac93ecf75eb862ef";"farmerName":"Ravi Kumar";"floraType":"Litchi";"weightKg":85;"moisturePct":16;"latitude":"25.61";"longitude":"85.14";"grade":"A";"harvestDate":"2026-04-04T00:00:00.000Z";"status":"certified";"createdAt":"2026-04-04T15:38:30.022Z";"updatedAt":"2026-04-04T16:11:28.541Z";"onChainDataHash":"0x011f2a9f9e0346cdf46009b93b78edd021a4116edd3f37474d771d45f640e2b3";"onChainTxHash":"0x3aba2a507fa8e1a1f39190f08b9c07105342be3e67ba2d10e2cd40b746660cc3";"payloadHash":"1814cce18ff150129d4a7bba1a99e972466449fc9ab8f0ac7d176b3e5bb47a9f"};"after":{"status":"dispatched"};"chainAnchored":true}
+2026-04-04T15:44:52.773Z,batch,HT-20260404-010,patch,warehouse,69d130bf3cb2d7818430ac17,{"before":{"batchId":"HT-20260404-010";"farmerId":"69d12981ac93ecf75eb862ef";"farmerName":"Ravi Kumar";"floraType":"Litchi";"weightKg":85;"moisturePct":16;"latitude":"25.61";"longitude":"85.14";"grade":"A";"harvestDate":"2026-04-04T00:00:00.000Z";"status":"pending";"createdAt":"2026-04-04T15:38:30.022Z";"updatedAt":"2026-04-04T15:38:30.247Z";"onChainDataHash":"0x011f2a9f9e0346cdf46009b93b78edd021a4116edd3f37474d771d45f640e2b3";"onChainTxHash":"0x3aba2a507fa8e1a1f39190f08b9c07105342be3e67ba2d10e2cd40b746660cc3";"payloadHash":"1814cce18ff150129d4a7bba1a99e972466449fc9ab8f0ac7d176b3e5bb47a9f"};"after":{"status":"in_warehouse"};"chainAnchored":true}
+2026-04-04T15:38:57.273Z,batch,HT-20260404-010,trace_viewed,consumer,public,{"tamperProof":true;"onChain":true}
+2026-04-04T15:38:30.285Z,batch,HT-20260404-010,create,farmer,69d12981ac93ecf75eb862ef,{"farmerId":"69d12981ac93ecf75eb862ef"}
+2026-04-04T15:26:19.244Z,batch,HT-20260404-006,trace_viewed,consumer,public,{"tamperProof":false;"onChain":true}
+2026-04-04T15:20:17.049Z,batch,HT-20260404-006,trace_viewed,consumer,public,{"tamperProof":false;"onChain":false}
+2026-04-04T15:17:42.206Z,batch,HT-20260404-006,create,farmer,69d12981ac93ecf75eb862ef,{"farmerId":"69d12981ac93ecf75eb862ef"}
+2026-04-01T19:45:01.861Z,batch,HT-20260402-001,trace_viewed,consumer,public,{"tamperProof":false;"onChain":false}

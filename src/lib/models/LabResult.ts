@@ -26,7 +26,7 @@ const LabResultSchema = new Schema(
 );
 
 LabResultSchema.set('toJSON', {
-  transform: (_doc, ret: any) => {
+  transform: (_doc, ret: Record<string, unknown>) => {
     ret._id = undefined;
     return ret;
   },

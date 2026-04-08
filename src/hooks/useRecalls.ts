@@ -18,16 +18,21 @@ export function useRecalls(): UseRecallsResult {
   const [error, setError]     = useState<string | null>(null);
   const [tick, setTick]       = useState(0);
 
-  const refresh = useCallback(() => setTick((n) => n + 1), []);
+  const refresh = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    setTick((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
 
     recallsApi
       .list()
-      .then(({ data }) => {
+      .then((res) => {
+        const data = Array.isArray((res as { data?: RecallEvent[] }).data)
+          ? (res as { data: RecallEvent[] }).data
+          : (Array.isArray(res) ? (res as RecallEvent[]) : []);
         if (!cancelled) {
           setRecalls(data);
           setLoading(false);

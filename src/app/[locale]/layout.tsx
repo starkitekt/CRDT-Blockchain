@@ -1,3 +1,4 @@
+import '@/lib/env';
 import type { Metadata, Viewport } from 'next';
 import {NextIntlClientProvider} from 'next-intl';
 import {getMessages} from 'next-intl/server';

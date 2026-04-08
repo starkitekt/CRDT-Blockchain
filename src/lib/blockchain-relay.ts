@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { ethers } from 'ethers';
 import { Contract, JsonRpcProvider, Wallet } from 'ethers';
 import HoneyTraceAbi from './abis/HoneyTraceRegistry.json';
 
@@ -22,8 +22,12 @@ function getRelayContract(): Contract {
   return contractInstance;
 }
 
-function keccakHash(input: string): string {
-  return `0x${createHash('sha256').update(input).digest('hex')}`;
+function keccakHash(data: unknown): string {
+  const json = JSON.stringify(
+    data,
+    Object.keys(data as object).sort()
+  );
+  return ethers.keccak256(ethers.toUtf8Bytes(json));
 }
 
 export function isBlockchainRelayEnabled(): boolean {
@@ -37,8 +41,7 @@ export async function anchorBatchOnChain(
   location: string
 ): Promise<string> {
   const contract = getRelayContract();
-  const stablePayload = JSON.stringify(payload, Object.keys(payload).sort());
-  const payloadHash = keccakHash(stablePayload);
+  const payloadHash = keccakHash(payload);  // ← pass object, not pre-stringified string
   const tx = await contract.recordBatch(batchId, payloadHash, bizStep, location);
   const receipt = await tx.wait();
   return receipt.hash;
@@ -46,8 +49,7 @@ export async function anchorBatchOnChain(
 
 export async function anchorLabResultOnChain(batchId: string, payload: Record<string, unknown>): Promise<string> {
   const contract = getRelayContract();
-  const stablePayload = JSON.stringify(payload, Object.keys(payload).sort());
-  const payloadHash = keccakHash(stablePayload);
+  const payloadHash = keccakHash(payload);
   const tx = await contract.linkLabResult(batchId, payloadHash);
   const receipt = await tx.wait();
   return receipt.hash;

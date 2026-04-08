@@ -11,6 +11,27 @@ import { useEffect } from 'react';
 export default function ServiceWorkerRegistrar() {
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+    const isProd = process.env.NODE_ENV === 'production';
+
+    if (!isProd) {
+      // Dev safety: remove previously installed SW/caches to avoid stale routing loops.
+      navigator.serviceWorker.getRegistrations()
+        .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+        .catch(() => {});
+
+      if ('caches' in window) {
+        caches.keys()
+          .then((keys) =>
+            Promise.all(
+              keys
+                .filter((k) => k.startsWith('honeytrace-shell-') || k.startsWith('honeytrace-api-'))
+                .map((k) => caches.delete(k))
+            )
+          )
+          .catch(() => {});
+      }
+      return;
+    }
 
     navigator.serviceWorker
       .register('/sw.js', { scope: '/' })
@@ -19,7 +40,7 @@ export default function ServiceWorkerRegistrar() {
         window.addEventListener('online', () => {
           if ('sync' in registration) {
             (registration as ServiceWorkerRegistration & { sync: { register(tag: string): Promise<void> } })
-              .sync.register('sync-harvest-queue').catch(() => {});
+              .sync.register('honeytrace-harvest-sync').catch(() => {});
           }
         });
       })

@@ -59,9 +59,12 @@ export default function LoginPortal() {
   const [loading, setLoading]         = useState(false);
   const [email, setEmail]             = useState('');
   const [password, setPassword]       = useState('');
+  const [signupName, setSignupName] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [demoFilled, setDemoFilled]   = useState(false);
   const [authError, setAuthError]     = useState<string | null>(null);
+  const [authInfo, setAuthInfo] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
@@ -93,6 +96,7 @@ export default function LoginPortal() {
 
   const handleLogin = async () => {
     setAuthError(null);
+    setAuthInfo(null);
     const roleForLogin = effectiveRole;
     if (!roleForLogin) {
       setAuthError('Please select a role before signing in.');
@@ -114,9 +118,31 @@ export default function LoginPortal() {
     void handleLogin();
   };
 
-  const handleSignup = (e: React.SyntheticEvent<HTMLFormElement>) => {
+  const handleSignup = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setMode('kyc');
+    setAuthError(null);
+    setAuthInfo(null);
+    if (!selectedRole) {
+      setAuthError('Please select a role before creating an account.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await authApi.register({
+        name: signupName,
+        email: signupEmail,
+        password: signupPassword,
+        role: selectedRole,
+      });
+      setAuthInfo('Account created. Please sign in and complete KYC verification if prompted.');
+      setEmail(signupEmail);
+      setPassword(signupPassword);
+      setMode('login');
+    } catch (err) {
+      setAuthError(err instanceof ApiError ? err.message : 'Registration failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleKYCSubmit = async () => {
@@ -176,6 +202,16 @@ export default function LoginPortal() {
                       title="Demo credentials pre-filled."
                       subtitle="You can sign in directly or change the role."
                       hideCloseButton
+                      lowContrast
+                    />
+                  )}
+
+                  {authInfo && (
+                    <InlineNotification
+                      kind="success"
+                      title="Registration successful."
+                      subtitle={authInfo}
+                      onCloseButtonClick={() => setAuthInfo(null)}
                       lowContrast
                     />
                   )}
@@ -263,6 +299,8 @@ export default function LoginPortal() {
                     placeholder="John Doe"
                     size="lg"
                     required
+                    value={signupName}
+                    onChange={(e) => setSignupName(e.target.value)}
                   />
                   <TextInput
                     id="email-signup"
@@ -270,6 +308,8 @@ export default function LoginPortal() {
                     placeholder="john@example.com"
                     size="lg"
                     required
+                    value={signupEmail}
+                    onChange={(e) => setSignupEmail(e.target.value)}
                   />
                   <TextInput
                     id="password-signup"
@@ -299,9 +339,9 @@ export default function LoginPortal() {
                     size="lg"
                     renderIcon={UserFollow}
                     type="submit"
-                    disabled={!selectedRole}
+                    disabled={!selectedRole || loading}
                   >
-                    {t('continueIdentity')}
+                    {loading ? t('authenticating') : t('continueIdentity')}
                   </Button>
 
                   <div className="text-center">

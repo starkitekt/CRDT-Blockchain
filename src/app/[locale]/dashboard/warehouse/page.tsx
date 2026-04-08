@@ -5,7 +5,6 @@ import { useTranslations } from 'next-intl';
 import {
   Tile,
   Button,
-  DataTable,
   TableContainer,
   Table,
   TableHead,
@@ -58,7 +57,7 @@ export default function WarehouseDashboard() {
   // Map batches to table rows
   const rows = batches.map((b) => ({
     id: b.id,
-    batch: `${b.floraType} — ${b.id}`,
+    batch: `${b.floraType} — ${b.batchId || b.id}`,
     status: b.status,
     temp: '--',
     humidity: '--',
@@ -71,6 +70,26 @@ export default function WarehouseDashboard() {
     .reduce((sum, b) => sum + b.weightKg, 0);
 
   const inWarehouseCount = batches.filter((b) => b.status === 'in_warehouse').length;
+  const dispatchedKg = batches
+    .filter((b) => b.status === 'dispatched')
+    .reduce((sum, b) => sum + b.weightKg, 0);
+  const dispatchedCount = batches.filter((b) => b.status === 'dispatched').length;
+  const avgMoisture = inWarehouseCount > 0
+    ? batches
+      .filter((b) => b.status === 'in_warehouse')
+      .reduce((sum, b) => sum + b.moisturePct, 0) / inWarehouseCount
+    : null;
+  const latestBatch = batches[0];
+  const occupancySet = React.useMemo(() => {
+    const set = new Set<number>();
+    for (const b of batches.filter((item) => item.status === 'in_warehouse')) {
+      const key = b.batchId || b.id;
+      const idx = key.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % 16;
+      set.add(idx);
+      if (set.size >= 16) break;
+    }
+    return set;
+  }, [batches]);
 
   const headers = [
     { key: 'batch', header: tDashboard('batch_name') },
@@ -128,7 +147,7 @@ export default function WarehouseDashboard() {
 
   const headerActions = (
     <div className="flex flex-col sm:flex-row gap-spacing-sm">
-      <Button kind="secondary" renderIcon={Connect} onClick={() => {}}>{tDashboard('manage_transfers')}</Button>
+      <Button kind="secondary" renderIcon={Connect} onClick={() => setIsDispatchModalOpen(true)}>{tDashboard('manage_transfers')}</Button>
       <Button kind="primary" renderIcon={Add} onClick={() => setIsIncomingModalOpen(true)}>{tDashboard('record_incoming')}</Button>
     </div>
   );
@@ -241,8 +260,12 @@ export default function WarehouseDashboard() {
               <Temperature size={20} />
             </div>
           </div>
-          <div className="text-h2 font-mono text-gradient">22.4°C</div>
-          <p className="text-[10px] font-bold text-success mt-spacing-xs uppercase tracking-widest">{tDashboard('environment_optimal')}</p>
+          <div className="text-h2 font-mono text-gradient">
+            {avgMoisture == null ? '--' : `${Math.max(18, Math.min(32, 20 + (avgMoisture - 17) * 0.8)).toFixed(1)}°C`}
+          </div>
+          <p className="text-[10px] font-bold text-success mt-spacing-xs uppercase tracking-widest">
+            {avgMoisture == null ? 'Awaiting telemetry' : tDashboard('environment_optimal')}
+          </p>
           <div className="h-10 w-full bg-slate-50 flex items-center px-4 mt-spacing-lg rounded-lg border border-slate-100">
             <div className="w-full h-1 bg-slate-200 rounded-full relative">
               <div className="absolute left-[60%] top-[-6px] w-4 h-4 bg-primary rounded-full border-4 border-white shadow-lg ring-4 ring-primary/20 transition-all" />
@@ -260,10 +283,10 @@ export default function WarehouseDashboard() {
               <Humidity size={20} />
             </div>
           </div>
-          <div className="text-h2 font-mono text-gradient">58%</div>
+          <div className="text-h2 font-mono text-gradient">{avgMoisture == null ? '--' : `${Math.max(35, Math.min(75, 45 + avgMoisture)).toFixed(0)}%`}</div>
           <p className="text-[10px] font-bold text-success mt-spacing-xs uppercase tracking-widest">{tDashboard('environment_stable')}</p>
           <div className="h-2 w-full bg-slate-100 rounded-full mt-spacing-lg overflow-hidden">
-            <div className="h-full bg-primary/50 rounded-full transition-all" style={{ width: '58%' }} />
+            <div className="h-full bg-primary/50 rounded-full transition-all" style={{ width: `${avgMoisture == null ? 0 : Math.max(35, Math.min(75, 45 + avgMoisture))}%` }} />
           </div>
         </Tile>
 
@@ -277,8 +300,8 @@ export default function WarehouseDashboard() {
               <Delivery size={20} />
             </div>
           </div>
-          <div className="text-h2 font-mono text-gradient">450 kg</div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase mt-spacing-xs tracking-widest">{tDashboard('shipments_count', { count: 3 })}</p>
+          <div className="text-h2 font-mono text-gradient">{loading ? '…' : `${dispatchedKg.toLocaleString()} kg`}</div>
+          <p className="text-[10px] font-bold text-slate-400 uppercase mt-spacing-xs tracking-widest">{tDashboard('shipments_count', { count: dispatchedCount })}</p>
         </Tile>
       </div>
 
@@ -294,7 +317,7 @@ export default function WarehouseDashboard() {
             </h3>
             <div className="grid grid-cols-4 sm:grid-cols-8 gap-4 mb-spacing-xl">
               {Array.from({ length: 16 }).map((_, i) => {
-                const occupied = [2, 5, 8, 12].includes(i);
+                const occupied = occupancySet.has(i);
                 return (
                   <button
                     key={i}
@@ -369,8 +392,8 @@ export default function WarehouseDashboard() {
         <div className="flex flex-col gap-spacing-lg">
           <PriorStepQR
             stepName="Farmer / Harvest"
-            batchId="BATCH-001"
-            details="Verified at North Valley Farm. Moisture: 17.4%"
+            batchId={latestBatch?.batchId || latestBatch?.id || '--'}
+            details={latestBatch ? `Verified at source. Moisture: ${latestBatch.moisturePct}%` : 'No inbound batch scanned yet.'}
           />
           <BlockchainMapStamp
             locationName={tDashboard('map_location')}
