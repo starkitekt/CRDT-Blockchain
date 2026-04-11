@@ -36,11 +36,8 @@ export function useBatches(params?: BatchListParams): UseBatchesResult {
     batchesApi
       .list({ farmerId, status })
       .then((res) => {
-        const data = Array.isArray((res as { data?: Batch[] }).data)
-          ? (res as { data: Batch[] }).data
-          : (Array.isArray(res) ? (res as Batch[]) : []);
         if (!cancelled) {
-          setBatches(data);
+          setBatches(Array.isArray(res) ? res : []);
           setLoading(false);
         }
       })

@@ -201,7 +201,7 @@ function KycQueue() {
                   <TableHead>
                     <TableRow>
                       {headers.map((h) => (
-                        <TableHeader key={h.key} {...getHeaderProps({ header: h })}>
+                        <TableHeader {...getHeaderProps({ header: h })}>
                           {h.header}
                         </TableHeader>
                       ))}
@@ -211,7 +211,7 @@ function KycQueue() {
                     {tableRows.map((row) => {
                       const user = users.find(u => u._id === row.id)!;
                       return (
-                        <TableRow key={row.id} {...getRowProps({ row })}>
+                        <TableRow {...getRowProps({ row })}>
                           {row.cells.map((cell) => {
                             if (cell.info.header === 'role') return (
                               <TableCell key={cell.id}>
@@ -326,7 +326,8 @@ export default function AdminDashboard() {
   const { recalls, loading: recallsLoading, error: recallsError, refresh: refreshRecalls } = useRecalls();
   const { batches, totalBatches, certifiedPct, pendingKyc } = useAdminStats();
   const latestBatchAt = batches[0]?.updatedAt || batches[0]?.createdAt || null;
-  const blockHeightBase = 452000 + batches.length + recalls.length;
+  const msElapsed = Date.now() - new Date('2025-01-01T00:00:00Z').getTime();
+  const blockHeightBase = 452000 + Math.floor(msElapsed / 12000) + batches.length + recalls.length;
   const nodes = [
     {
       name: 'Batch API Node',

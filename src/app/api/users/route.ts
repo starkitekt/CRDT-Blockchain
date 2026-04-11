@@ -7,7 +7,7 @@ import { requireAuth, handleAuthError, AuthError } from '@/lib/rbac';
 /** GET /api/users?kycCompleted=false — admin KYC queue */
 export async function GET(req: NextRequest) {
   try {
-    requireAuth(req, ['admin', 'secretary']);
+    await requireAuth(req, ['admin', 'secretary']);
 
     await connectDB();
 
@@ -15,10 +15,13 @@ export async function GET(req: NextRequest) {
     const filter: Record<string, unknown> = {};
     if (kycParam !== null) {
       filter.kycCompleted = kycParam === 'true';
+      if (kycParam === 'false') {
+        filter.kycRejected = { $ne: true };
+      }
     }
 
     const users = await User.find(filter)
-      .select('email name role kycCompleted createdAt')
+      .select('email name role kycCompleted kycRejected fssaiLicense gstNumber nablAccreditationNo createdAt')
       .sort({ createdAt: -1 })
       .lean();
 

@@ -30,11 +30,8 @@ export function useLabResults(): UseLabResultsResult {
     labApi
       .list()
       .then((res) => {
-        const data = Array.isArray((res as { data?: LabResult[] }).data)
-          ? (res as { data: LabResult[] }).data
-          : (Array.isArray(res) ? (res as LabResult[]) : []);
         if (!cancelled) {
-          setResults(data);
+          setResults(Array.isArray(res) ? res : []);
           setLoading(false);
         }
       })

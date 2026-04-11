@@ -27,8 +27,13 @@ export class ApiError extends Error {
 // ── Core fetch helpers ────────────────────────────────────────────────────────
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = path.startsWith('http') ? path : path;
-  const res = await fetch(url, {
+  const normalizedPath = path.startsWith('http')
+    ? path
+    : path.startsWith('/')
+      ? path
+      : `/${path}`;
+
+  const res = await fetch(normalizedPath, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
@@ -45,7 +50,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const message =
-      (body.error as string) ?? (body.message as string) ?? `HTTP ${res.status}`;
+      (body.error as string) ?? (body.message as string) ?? `HTTP ${res.status} (${normalizedPath})`;
     const violations = body.violations as string[] | undefined;
     throw new ApiError(res.status, message, violations);
   }
@@ -76,31 +81,43 @@ export interface BatchListParams {
   status?: string;
 }
 
+export interface CreateBatchPayload {
+  farmerId: string;
+  farmerName: string;
+  floraType: string;
+  weightKg: number;
+  moisturePct: number;
+  latitude: string;
+  longitude: string;
+  grade: 'A' | 'B';
+  harvestDate: string;
+}
+
 export const batchesApi = {
   list:   (params?: BatchListParams) => {
     const qs = new URLSearchParams();
     if (params?.farmerId) qs.set('farmerId', params.farmerId);
     if (params?.status)   qs.set('status',   params.status);
     const query = qs.toString();
-    return apiGet<{ data: Batch[] }>(`/api/batches${query ? `?${query}` : ''}`);
+    return apiGet<Batch[]>(`/api/batches${query ? `?${query}` : ''}`);
   },
-  get:    (id: string)   => apiGet<{ data: Batch }>(`/api/batches/${id}`),
-  create: (payload: Omit<Batch, 'id' | 'createdAt' | 'status'>) =>
+  get:    (id: string)   => apiGet<Batch>(`/api/batches/${id}`),
+  create: (payload: CreateBatchPayload) =>
     apiPost<{ data: Batch }>('/api/batches', payload),
   patch:  (id: string, payload: Partial<Batch>) =>
-    apiPatch<{ data: Batch }>(`/api/batches/${id}`, payload),
+    apiPatch<Batch>(`/api/batches/${id}`, payload),
 };
 
 export const labApi = {
-  list:      ()          => apiGet<{ data: LabResult[] }>('/api/lab'),
-  getByBatch:(batchId: string) => apiGet<{ data: LabResult }>(`/api/lab/${batchId}`),
+  list:      ()          => apiGet<LabResult[]>('/api/lab'),
+  getByBatch:(batchId: string) => apiGet<LabResult>(`/api/lab/${batchId}`),
   publish:   (payload: Omit<LabResult, 'publishedAt'>) =>
     apiPost<{ data: LabResult; violations: string[] }>('/api/lab', payload),
 };
 
 export const recallsApi = {
-  list:   ()        => apiGet<{ data: RecallEvent[] }>('/api/recalls'),
-  create: (payload: Omit<RecallEvent, 'id' | 'initiatedAt'>) =>
+  list:   ()        => apiGet<RecallEvent[]>('/api/recalls'),
+  create: (payload: Omit<RecallEvent, 'id' | 'initiatedAt' | 'initiatedBy'>) =>
     apiPost<{ data: RecallEvent }>('/api/recalls', payload),
 };
 

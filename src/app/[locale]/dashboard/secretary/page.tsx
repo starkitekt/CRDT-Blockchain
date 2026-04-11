@@ -182,7 +182,7 @@ function KycQueue() {
                   <TableHead>
                     <TableRow>
                       {headers.map((h) => (
-                        <TableHeader key={h.key} {...getHeaderProps({ header: h })}>
+                        <TableHeader {...getHeaderProps({ header: h })}>
                           {h.header}
                         </TableHeader>
                       ))}
@@ -192,7 +192,7 @@ function KycQueue() {
                     {tableRows.map((row) => {
                       const user = users.find(u => u._id === row.id)!;
                       return (
-                        <TableRow key={row.id} {...getRowProps({ row })}>
+                        <TableRow {...getRowProps({ row })}>
                           {row.cells.map((cell) => {
                             if (cell.info.header === 'role') {
                               return (
@@ -282,12 +282,15 @@ export default function SecretaryDashboard() {
   const { recalls } = useRecalls();
   const [pendingKycCount, setPendingKycCount] = useState<number>(0);
   const [mspValue, setMspValue] = useState<number>(348);
+  const now = new Date(); const cycleId = `CYCLE-${now.getFullYear()}-Q${Math.ceil((now.getMonth() + 1) / 3)}`;
   const [isMspModalOpen, setIsMspModalOpen] = useState(false);
   const [secretaryToast, setSecretaryToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
 
   const totalProductionKg = batches.reduce((sum, b) => sum + b.weightKg, 0);
   const activeFarmers = new Set(batches.map((b) => b.farmerId)).size;
+  const totalKg = batches.reduce((sum, b) => sum + b.weightKg, 0);
   const dispatchedKg = batches.filter((b) => b.status === 'dispatched').reduce((sum, b) => sum + b.weightKg, 0);
+  const disbursePct = totalKg > 0 ? Math.round((dispatchedKg / totalKg) * 100) : 0;
   const recallRate = batches.length > 0 ? ((recalls.length / batches.length) * 100).toFixed(1) : '0.0';
 
   useEffect(() => {
@@ -460,7 +463,7 @@ export default function SecretaryDashboard() {
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <p className="text-[10px] font-bold text-primary/80 mb-2 uppercase tracking-[0.2em]">{tDashboard('subsidy_batch')}</p>
-                  <p className="text-h2 !text-white leading-none">CYCLE-2024-Q1</p>
+                  <p className="text-h2 !text-white leading-none">{cycleId}</p>
                 </div>
                 <Tag type="green" className="!rounded-md font-bold uppercase tracking-widest text-[10px] px-3 border-none bg-success/20 text-success shadow-lg">{tDashboard('audit_pass')}</Tag>
               </div>
@@ -469,8 +472,8 @@ export default function SecretaryDashboard() {
                   <span className="text-slate-400 font-bold uppercase tracking-widest text-[11px]">{tDashboard('pending_subsidies')}</span>
                   <span className="font-bold text-lg text-primary tracking-tighter">₹4.2 {tDashboard('crore')}</span>
                 </div>
-                <ProgressBar label={tDashboard('pending_subsidies')} hideLabel value={82} status="finished" size="small" className="!mb-0" />
-                <p className="text-[11px] text-slate-500 text-right font-bold uppercase tracking-widest">{tDashboard('disbursement_verified', { percent: 82 })}</p>
+                <ProgressBar label={tDashboard('pending_subsidies')} hideLabel value={disbursePct} status="finished" size="small" className="!mb-0" />
+                <p className="text-[11px] text-slate-500 text-right font-bold uppercase tracking-widest">{tDashboard('disbursement_verified', { percent: disbursePct })}</p>
               </div>
               <div className="p-4 bg-black/40 rounded-xl font-mono text-[11px] text-primary/60 ring-1 ring-white/5 shadow-inner mb-8">
                 {tDashboard('block_payload')}

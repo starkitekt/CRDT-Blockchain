@@ -198,7 +198,7 @@ export interface RecallEvent {
   tier: RecallTier;
   reason: string;
   affectedKg: number;
-  initiatedBy: string;
+  initiatedBy?: string;
   initiatedAt: string;       // ISO 8601
   onChainTxHash?: string;
 }

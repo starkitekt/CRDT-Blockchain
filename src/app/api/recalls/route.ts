@@ -7,7 +7,7 @@ import { requireAuth, handleAuthError, AuthError } from '@/lib/rbac';
 /** GET /api/recalls — list all recall events */
 export async function GET(req: NextRequest) {
   try {
-    requireAuth(req, ['officer', 'admin', 'secretary', 'enterprise']);
+    await requireAuth(req, ['officer', 'admin', 'secretary', 'enterprise']);
     const data = await listRecalls();
     return NextResponse.json(data);
   } catch (err) {
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     // ── Auth first — before body parse ───────────────────────────────────
-    const actor = requireAuth(req, ['officer', 'admin']);
+    const actor = await requireAuth(req, ['officer', 'admin']);
 
     const body = await req.json();
     const parsed = CreateRecallSchema.safeParse(body);
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const actorId = (actor as any).userId ?? (actor as any).id ?? (actor as any).sub ?? 'system';
+    const actorId = actor.userId;
     const data = await createRecall(
       { ...parsed.data, initiatedBy: actorId },
       actorId,

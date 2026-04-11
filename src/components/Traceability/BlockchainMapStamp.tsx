@@ -45,7 +45,7 @@ export default function BlockchainMapStamp({
             <span className="text-[11px] uppercase tracking-tighter text-text-secondary font-bold">{tCommon('timestamp')}</span>
             <div className="flex items-center justify-end gap-1">
               <Time size={12} className="text-text-secondary" />
-              <span className="text-xs font-mono leading-tight tracking-tighter">
+              <span className="text-xs font-mono leading-tight tracking-tighter" suppressHydrationWarning>
                 {utcTime} <span className="text-primary font-bold">UTC</span>
               </span>
             </div>

@@ -6,7 +6,7 @@ import { Batch } from '@/lib/models/Batch';
 
 export async function GET(req: NextRequest) {
   try {
-    requireAuth(req, ['admin']);
+    await requireAuth(req, ['admin']);
     await connectDB();
 
     const { searchParams } = new URL(req.url);

@@ -1,6 +1,8 @@
 // src/lib/rbac.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken, JWTPayload } from '@/lib/auth';
+import { connectDB } from '@/lib/mongodb';
+import { User } from '@/lib/models/User';
 
 export type AuthPayload = JWTPayload;
 
@@ -13,10 +15,10 @@ export class AuthError extends Error {
 // Roles that are never blocked by KYC — they manage KYC themselves
 const KYC_EXEMPT_ROLES = new Set(['admin', 'secretary', 'consumer']);
 
-export function requireAuth(
+export async function requireAuth(
   req: NextRequest,
   allowedRoles?: string[]
-): AuthPayload {
+): Promise<AuthPayload> {
   // ── Accept cookie OR Authorization: Bearer header ──────────────────────
   const cookieToken = req.cookies.get('honeytrace_token')?.value;
   const bearerToken = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
@@ -34,6 +36,13 @@ export function requireAuth(
   // ── KYC gate ────────────────────────────────────────────────────────────
   // Non-exempt operational roles must have KYC approved.
   if (!KYC_EXEMPT_ROLES.has(payload.role) && !payload.kycCompleted) {
+    // Fallback DB check lets KYC approvals take effect immediately for users
+    // with a stale JWT claim minted before approval.
+    await connectDB();
+    const user = await User.findById(payload.userId).select('kycCompleted').lean();
+    if (user?.kycCompleted) {
+      return { ...payload, kycCompleted: true };
+    }
     throw new AuthError(403, 'KYC verification required. Please complete your profile.');
   }
   // ────────────────────────────────────────────────────────────────────────
