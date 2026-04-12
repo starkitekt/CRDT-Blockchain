@@ -53,6 +53,9 @@ export interface IUser extends Document {
 
   // ── Consumer ──────────────────────────────────────────────────────────────
   mobileNumber?: string;
+
+  // ── Blockchain Identity (auto-generated) ────────────────────────────────
+  blockchainId?: string;
 }
 
 const UserSchema = new Schema<IUser>(
@@ -104,6 +107,9 @@ const UserSchema = new Schema<IUser>(
 
     // ── Consumer ──────────────────────────────────────────────────────────────
     mobileNumber: { type: String, trim: true },
+
+    // ── Blockchain Identity ─────────────────────────────────────────────────
+    blockchainId: { type: String, trim: true, unique: true, sparse: true },
   },
   { timestamps: true }
 );

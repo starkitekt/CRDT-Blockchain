@@ -413,7 +413,7 @@ export default function SecretaryDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-spacing-lg">
         {stats.map((stat, i) => (
           <Tile key={i} className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
-            <div className={`absolute right-[-20px] top-[-20px] opacity-10 group-hover:rotate-12 transition-transform duration-700 text-${stat.color}-600`}>
+            <div className={`absolute right-[-20px] top-[-20px] opacity-10 group-hover:rotate-12 transition-transform duration-700 ${colorClasses[stat.color]?.split(' ')[0] ?? 'text-primary'}`}>
               {i === 0 && <DataAnalytics size={100} />}
               {i === 1 && <Policy size={100} />}
               {i === 2 && <Money size={100} />}

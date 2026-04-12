@@ -115,8 +115,8 @@ export default function SimplifiedFarmerOnboarding({
             
             <div className="p-spacing-md bg-slate-50 border border-slate-100 rounded text-left mt-spacing-xl">
                <p className="text-[10px] text-text-secondary uppercase font-bold mb-2">{t('blockchainReceipt')}</p>
-              <p className="text-xs font-mono break-all opacity-60">TX_ID: 0x882a...bf41</p>
-              <CopyableValue value="0x882a...bf41" label="Copy TX ID" className="mt-2 min-h-0 h-7 px-2" />
+              <p className="text-xs font-mono break-all opacity-60">TX_ID: 0x882af7e3c4d91b2f6a8e05d43c7b9f1e2a6d8c4b5f3e7a9d1c6b8e2f4a7d3c9bf41</p>
+              <CopyableValue value="0x882af7e3c4d91b2f6a8e05d43c7b9f1e2a6d8c4b5f3e7a9d1c6b8e2f4a7d3c9bf41" label="Copy TX ID" className="mt-2 min-h-0 h-7 px-2" />
             </div>
 
             <Button className="w-full mt-spacing-xl" size="lg" onClick={onCompleteAction}>{t('enterPortal')}</Button>

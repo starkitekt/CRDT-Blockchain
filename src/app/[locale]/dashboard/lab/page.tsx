@@ -417,11 +417,11 @@ export default function LabDashboard() {
                 <div>
                   <h4 className="text-h2 !text-white !tracking-normal">{tDashboard('certOfPurity')}</h4>
                   <div className="flex items-center gap-2 mt-2">
-                    <p className="text-[10px] text-primary font-mono tracking-[0.1em]">
-                      {tDashboard('hash')}: {selectedBatchId ? `0x${selectedBatchId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toLowerCase()}...F92A` : '--'}
+                    <p className="text-[10px] text-primary font-mono tracking-[0.1em] break-all">
+                      {tDashboard('hash')}: {(() => { const b = pendingBatches.find(x => x.batchId === selectedBatchId || x.id === selectedBatchId); return b?.onChainTxHash || b?.onChainDataHash || '--'; })()}
                     </p>
                     <CopyableValue
-                      value={selectedBatchId ? `0x${selectedBatchId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toLowerCase()}...F92A` : '--'}
+                      value={(() => { const b = pendingBatches.find(x => x.batchId === selectedBatchId || x.id === selectedBatchId); return b?.onChainTxHash || b?.onChainDataHash || '--'; })()}
                       label="Copy Hash"
                       className="text-primary min-h-0 h-6 px-2"
                     />
