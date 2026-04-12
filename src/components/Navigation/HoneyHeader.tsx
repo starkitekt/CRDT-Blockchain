@@ -21,6 +21,7 @@ import {
 } from "@carbon/icons-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { authApi } from "@/lib/api";
 import NotificationCenter, {
   NotificationItem,
 } from "../Notifications/NotificationCenter";
@@ -201,7 +202,7 @@ const HoneyHeader = () => {
 
   // Load role-specific notifications only when the role changes
   useEffect(() => {
-    setNotifications(ROLE_NOTIFICATIONS[currentRole.id] ?? []);
+    setNotifications([]);
   }, [currentRole.id]);
 
   const unreadCount = useMemo(
@@ -218,8 +219,13 @@ const HoneyHeader = () => {
   const clearAll = () => setNotifications([]);
 
   const handleLogout = () => setIsLogoutConfirmOpen(true);
-  const confirmLogout = () => {
+  const confirmLogout = async () => {
     setIsLogoutConfirmOpen(false);
+    try {
+      await authApi.logout();
+    } catch {
+      // continue navigation even if logout request fails
+    }
     router.push("/");
   };
 

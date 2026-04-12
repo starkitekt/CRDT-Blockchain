@@ -43,6 +43,8 @@ function fmtDate(d?: string | null) {
 function QualityTag({ batch }: { batch: Batch }) {
   if (batch.status === 'recalled')
     return <Tag type="red" renderIcon={WarningAlt}>Recalled</Tag>;
+  if (batch.status === 'certified' || batch.status === 'dispatched')
+    return <Tag type="green" renderIcon={CheckmarkFilled}>Certified</Tag>;
   if (batch.labResults?.passed === true)
     return <Tag type="green" renderIcon={CheckmarkFilled}>Certified</Tag>;
   if (batch.labResults?.passed === false)
@@ -155,7 +157,7 @@ export default function EnterpriseDashboard() {
         </Tile>
       ) : (
         <DataTable rows={rows} headers={HEADERS} isSortable>
-          {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }: any) => (
+          {({ rows: tableRows, headers, getTableProps, getHeaderProps, getRowProps }) => (
             <TableContainer
               title="Received Dispatches"
               description="All batches dispatched to your organisation"
@@ -163,7 +165,7 @@ export default function EnterpriseDashboard() {
               <Table {...getTableProps()} size="lg">
                 <TableHead>
                   <TableRow>
-                    {headers.map((h: any) => (
+                    {headers.map((h) => (
                       <TableHeader key={h.key} {...(() => { const { key: _k, ...rest } = getHeaderProps({ header: h }); return rest; })()}>
                         {h.header}
                       </TableHeader>
@@ -171,11 +173,11 @@ export default function EnterpriseDashboard() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {tableRows.map((row: any) => {
+                  {tableRows.map((row) => {
                     const batch = batches.find(b => b.id === row.id)!;
                     return (
                       <TableRow key={row.id} {...(() => { const { key: _k, ...rest } = getRowProps({ row }); return rest; })()}>
-                        {row.cells.map((cell: any) => {
+                        {row.cells.map((cell) => {
                           switch (cell.info.header) {
                             case 'quality':
                               return (

@@ -18,6 +18,7 @@ import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
 import BlockchainCertificate from '@/components/Traceability/BlockchainCertificate';
 import CTETimeline, { CTEEvent } from '@/components/Traceability/CTETimeline';
 import { batchesApi, labApi, ApiError } from '@/lib/api';
+import type { Batch, LabResult } from '@/types';
 
 type TFn = (...args: unknown[]) => string;
 
@@ -32,8 +33,8 @@ export default function ConsumerPortal() {
   const [isCertificateOpen, setIsCertificateOpen] = useState(false);
   const [searchError, setSearchError]         = useState<string | null>(null);
   const [labWarning, setLabWarning]           = useState<string | null>(null);
-  const [batchData, setBatchData]             = useState<Record<string, unknown> | null>(null);
-  const [labData, setLabData]                 = useState<Record<string, unknown> | null>(null);
+  const [batchData, setBatchData]             = useState<Batch | null>(null);
+  const [labData, setLabData]                 = useState<LabResult | null>(null);
   const [traceTimeline, setTraceTimeline]     = useState<Array<Record<string, unknown>>>([]);
   const [showScanner, setShowScanner]         = useState(false);
 
@@ -60,7 +61,7 @@ export default function ConsumerPortal() {
 
     try {
       const batch = await batchesApi.get(id);
-      setBatchData(batch as Record<string, unknown>);
+      setBatchData(batch);
 
       try {
         const traceRes = await fetch(`/api/trace/${id}`);
@@ -72,7 +73,7 @@ export default function ConsumerPortal() {
 
       try {
         const lab = await labApi.getByBatch(id);
-        setLabData(lab as Record<string, unknown>);
+        setLabData(lab);
       } catch (labErr) {
         if (labErr instanceof ApiError && labErr.status === 404) {
           setLabWarning('Lab results are not yet available for this batch.');
@@ -109,29 +110,25 @@ export default function ConsumerPortal() {
   };
 
   const cteEvents: CTEEvent[] = traceTimeline.map(e => ({
-    bizStep:    BIZ_STEP_MAP[e.step as string] ?? 'urn:epcglobal:cbv:bizstep:unknown',
+    id:         (e.id as string) ?? `${String(e.step ?? 'event')}-${String(e.timestamp ?? Date.now())}`,
+    bizStep:    BIZ_STEP_MAP[e.step as string] ?? 'urn:epcglobal:cbv:bizstep:harvesting',
     label:      e.label as string,
     location:   (e.location as string) ?? 'Location not recorded',
-    eventTime:  e.timestamp as string | undefined,
+    eventTime:  (e.timestamp as string) ?? new Date().toISOString(),
     status:     'completed' as const,
     disposition:'active' as const,
-    actor:      e.actor as string | undefined,
+    actor:      (e.actor as string) ?? 'system',
   }));
 
   const purityPct: string | null = (() => {
     if (!labData) return null;
-    if (labData.passed === false) return '< 70.0';
-    if (labData.passed === true) {
-      const moistureScore    = labData.moisture != null
-        ? Math.max(0, 100 - ((labData.moisture as number) / 20) * 30) : 85;
-      const hmfScore         = labData.hmf != null
-        ? Math.max(0, 100 - ((labData.hmf as number) / 40) * 20) : 90;
-      const antibioticPenalty = labData.antibioticPpb != null
-        && (labData.antibioticPpb as number) > 0.05 ? 15 : 0;
-      const composite = (moistureScore * 0.5 + hmfScore * 0.3 + (100 - antibioticPenalty) * 0.2);
-      return Math.min(99.9, Math.max(70, composite)).toFixed(1);
-    }
-    return null;
+    const moistureScore = labData.moisture != null
+      ? Math.max(0, 100 - (labData.moisture / 20) * 30) : 85;
+    const hmfScore = labData.hmf != null
+      ? Math.max(0, 100 - (labData.hmf / 40) * 20) : 90;
+    const antibioticPenalty = labData.antibioticPpb != null && labData.antibioticPpb > 0.05 ? 15 : 0;
+    const composite = (moistureScore * 0.5 + hmfScore * 0.3 + (100 - antibioticPenalty) * 0.2);
+    return Math.min(99.9, Math.max(70, composite)).toFixed(1);
   })();
 
   const stakeholders: string[] = batchData
@@ -321,10 +318,10 @@ export default function ConsumerPortal() {
             {/* Harvest Location Map */}
             {Boolean(batchData.latitude) && Boolean(batchData.longitude) && (
               <BlockchainMapStamp
-                locationName={(batchData.locationName as string | undefined) ?? 'Harvest Location'}
-                latitude={batchData.latitude as string}
-                longitude={batchData.longitude as string}
-                utcTime={(batchData.harvestDate as string | undefined) ?? new Date().toISOString()}
+                locationName="Harvest Location"
+                latitude={batchData.latitude}
+                longitude={batchData.longitude}
+                utcTime={new Date().toISOString().substring(11, 19)}
               />
             )}
 

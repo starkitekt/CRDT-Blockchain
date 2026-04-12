@@ -380,7 +380,11 @@ export default function FarmerDashboard({
                 </TableHead>
                 <TableBody>
                   {batches.length === 0 && (
-                    <EmptyState title="No harvest records yet" description="Submit your first harvest using the 'Record New Harvest' button above." />
+                    <TableRow>
+                      <TableCell colSpan={4}>
+                        <EmptyState title="No harvest records yet" description="Submit your first harvest using the 'Record New Harvest' button above." />
+                      </TableCell>
+                    </TableRow>
                   )}
                   {batches.map((batch) => (
                     <TableRow key={batch.id} className="hover:!bg-slate-50 transition-colors border-none group">

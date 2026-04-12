@@ -11,7 +11,7 @@ const WRITE_ROLES = ['farmer', 'admin'];
 /** GET /api/batches — list batches; supports ?farmerId=X and/or ?status=X filters */
 export async function GET(req: NextRequest) {
   try {
-    requireAuth(req, READ_ROLES);
+    await requireAuth(req, READ_ROLES);
 
     const farmerId = req.nextUrl.searchParams.get('farmerId') ?? undefined;
     const status = req.nextUrl.searchParams.get('status') ?? undefined;
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     // ── Auth first — before body parse ───────────────────────────────────
-    const actor = requireAuth(req, WRITE_ROLES);
+    const actor = await requireAuth(req, WRITE_ROLES);
 
     const body = await req.json();
     const parsed = CreateBatchSchema.safeParse(body);

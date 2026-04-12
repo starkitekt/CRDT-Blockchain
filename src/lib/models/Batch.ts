@@ -37,7 +37,7 @@ const BatchSchema = new Schema(
     labCertifiedAt: { type: Date },
     labResults: {
       moisture: { type: Number },
-      hmc: { type: Number },
+      hmf: { type: Number },
       antibiotics: { type: Boolean },
       pesticides: { type: Boolean },
       passed: { type: Boolean },

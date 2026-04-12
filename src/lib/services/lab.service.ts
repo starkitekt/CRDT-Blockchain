@@ -38,6 +38,10 @@ export async function publishLabResult(
     throw new Error('BATCH_NOT_FOUND');
   }
 
+  if (batch.status !== 'in_warehouse') {
+    throw new Error('BATCH_NOT_IN_WAREHOUSE');
+  }
+
   const violations = runCodexValidation(input);
   if (violations.length > 0) {
     const err = new Error('CODEX_VIOLATION') as Error & { violations?: string[] };
@@ -60,8 +64,18 @@ export async function publishLabResult(
     await result.save();
   }
 
-  // Certify the batch
-  batch.status = 'certified';
+  // Lab completes testing; officer must still approve/reject.
+  batch.status = 'in_testing';
+  batch.labId = input.labId;
+  batch.labSubmittedAt = publishedAt;
+  batch.labReportId = input.sampleId;
+  batch.labResults = {
+    moisture: input.moisture,
+    hmf: input.hmf,
+    antibiotics: input.antibioticPpb,
+    pesticides: input.pesticideMgKg,
+    passed: true,
+  };
   await batch.save();
 
   await auditLog({

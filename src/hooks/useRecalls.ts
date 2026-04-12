@@ -30,11 +30,8 @@ export function useRecalls(): UseRecallsResult {
     recallsApi
       .list()
       .then((res) => {
-        const data = Array.isArray((res as { data?: RecallEvent[] }).data)
-          ? (res as { data: RecallEvent[] }).data
-          : (Array.isArray(res) ? (res as RecallEvent[]) : []);
         if (!cancelled) {
-          setRecalls(data);
+          setRecalls(Array.isArray(res) ? res : []);
           setLoading(false);
         }
       })

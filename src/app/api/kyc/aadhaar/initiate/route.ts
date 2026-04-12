@@ -12,7 +12,7 @@ const Schema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const actor = requireAuth(req);
+    const actor = await requireAuth(req);
     const body = await req.json();
     const parsed = Schema.safeParse(body);
     if (!parsed.success) {

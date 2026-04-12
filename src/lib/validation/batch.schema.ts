@@ -21,10 +21,15 @@ export const PatchBatchSchema = z.object({
   onChainTxHash: z.string().optional(),
   weightKg: z.number().positive().optional(),
   moisturePct: z.number().min(0).max(100).optional(),
-  latitude: z.string().optional(),   // ← String
-  longitude: z.string().optional(),   // ← String
+  latitude: z.string().optional(),
+  longitude: z.string().optional(),
   grade: z.enum(['A', 'B']).optional(),
+  warehouseReceivedAt: z.string().optional(),
+  dispatchedAt: z.string().optional(),
+  destinationEnterprise: z.string().optional(),
+  invoiceNo: z.string().optional(),
 }).strict();
 
 export type CreateBatchInput = z.infer<typeof CreateBatchSchema>;
 export type PatchBatchInput = z.infer<typeof PatchBatchSchema>;
+

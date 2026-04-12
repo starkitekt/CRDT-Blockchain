@@ -14,7 +14,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    requireAuth(req, READ_ROLES);
+    await requireAuth(req, READ_ROLES);
 
     const { id } = await params;
     const data = await getBatchById(id);
@@ -35,7 +35,7 @@ export async function PATCH(
 ) {
   try {
     // ── Auth first ────────────────────────────────────────────────────────
-    const actor = requireAuth(req, PATCH_ROLES);
+    const actor = await requireAuth(req, PATCH_ROLES);
 
     const { id } = await params;
     const body = await req.json();

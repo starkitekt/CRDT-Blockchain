@@ -10,7 +10,7 @@ const COOKIE_MAX_AGE = 60 * 60 * 8; // 8 hours
 
 export async function GET(req: NextRequest) {
   try {
-    const actor = requireAuth(req);
+    const actor = await requireAuth(req);
     return NextResponse.json({ user: actor });
   } catch (err) {
     if (err instanceof AuthError) return handleAuthError(err);
