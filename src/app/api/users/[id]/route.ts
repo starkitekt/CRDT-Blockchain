@@ -1,7 +1,7 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, AuthError, handleAuthError } from '@/lib/rbac';
 import { connectDB } from '@/lib/mongodb';
-import { User } from '@/lib/models/User';
+import { User, IUser } from '@/lib/models/User';
 import { AuditLog } from '@/lib/models/AuditLog';
 import { z } from 'zod';
 
@@ -66,7 +66,7 @@ export async function PATCH(
   }
 
   await connectDB();
-  let user: Awaited<ReturnType<typeof User.findById>>;
+  let user: (IUser & import('mongoose').Document) | null;
   try {
     user = await User.findById(id);
   } catch {
