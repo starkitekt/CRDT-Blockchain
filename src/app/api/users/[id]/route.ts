@@ -66,7 +66,12 @@ export async function PATCH(
   }
 
   await connectDB();
-  const user = await User.findById(id);
+  let user: Awaited<ReturnType<typeof User.findById>>;
+  try {
+    user = await User.findById(id);
+  } catch {
+    return NextResponse.json({ error: 'Invalid user ID' }, { status: 400 });
+  }
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
   const updates = parsed.data;
