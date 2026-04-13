@@ -43,6 +43,7 @@ import GuidedTour from '@/components/Onboarding/GuidedTour';
 import IdentityVerificationModal from '@/components/Onboarding/IdentityVerificationModal';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
 import RecallManagementModal from '@/components/Traceability/RecallManagementModal';
+import CopyableValue from '@/components/CopyableValue';
 import { useRecalls } from '@/hooks/useRecalls';
 import { useBatches } from '@/hooks/useBatches';
 import type { RecallEvent } from '@/types';
@@ -201,7 +202,7 @@ function KycQueue() {
                   <TableHead>
                     <TableRow>
                       {headers.map((h) => (
-                        <TableHeader {...getHeaderProps({ header: h })}>
+                        <TableHeader key={h.key} {...(() => { const { key: _k, ...rest } = getHeaderProps({ header: h }); return rest; })()}>
                           {h.header}
                         </TableHeader>
                       ))}
@@ -211,7 +212,7 @@ function KycQueue() {
                     {tableRows.map((row) => {
                       const user = users.find(u => u._id === row.id)!;
                       return (
-                        <TableRow {...getRowProps({ row })}>
+                        <TableRow key={row.id} {...(() => { const { key: _k, ...rest } = getRowProps({ row }); return rest; })()}>
                           {row.cells.map((cell) => {
                             if (cell.info.header === 'role') return (
                               <TableCell key={cell.id}>
@@ -601,6 +602,7 @@ export default function AdminDashboard() {
                     <TableHeader className="!bg-transparent !text-caption !text-[10px] !p-4">Tier</TableHeader>
                     <TableHeader className="!bg-transparent !text-caption !text-[10px] !p-4">Reason</TableHeader>
                     <TableHeader className="!bg-transparent !text-caption !text-[10px] !p-4">Initiated At</TableHeader>
+                    <TableHeader className="!bg-transparent !text-caption !text-[10px] !p-4">On-Chain TX</TableHeader>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -614,6 +616,16 @@ export default function AdminDashboard() {
                       </TableCell>
                       <TableCell className="!p-4 !border-none text-slate-500 font-medium">
                         {recall.initiatedAt ? new Date(recall.initiatedAt).toLocaleString() : '—'}
+                      </TableCell>
+                      <TableCell className="!p-4 !border-none">
+                        {recall.onChainTxHash ? (
+                          <div className="flex items-center gap-1">
+                            <span className="font-mono text-[11px] text-teal-700 break-all max-w-[180px]">{recall.onChainTxHash}</span>
+                            <CopyableValue value={recall.onChainTxHash} label="Copy" className="min-h-0 h-6 px-1" />
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">Off-chain</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

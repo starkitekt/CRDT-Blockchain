@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { Contract, JsonRpcProvider, Wallet } from 'ethers';
+import { Contract, JsonRpcProvider, Network, Wallet } from 'ethers';
 import HoneyTraceAbi from './abis/HoneyTraceRegistry.json';
 
 const rpcUrl = process.env.BLOCKCHAIN_RPC_URL || process.env.LOCAL_RPC_URL || 'http://127.0.0.1:8545';
@@ -7,6 +7,20 @@ const privateKey = process.env.BLOCKCHAIN_RELAYER_PRIVATE_KEY || process.env.DEP
 const contractAddress = process.env.HONEYTRACE_CONTRACT_ADDRESS || process.env.NEXT_PUBLIC_HONEYTRACE_CONTRACT;
 
 const chainEnabled = Boolean(privateKey && contractAddress);
+
+function buildProvider(url: string): JsonRpcProvider {
+  const isBaseSepolia = url.toLowerCase().includes('base') && url.toLowerCase().includes('sepolia');
+  const isLocalhost = url.includes('127.0.0.1') || url.includes('localhost');
+  if (isBaseSepolia) {
+    const net = new Network('base-sepolia', 84532);
+    return new JsonRpcProvider(url, net, { staticNetwork: net });
+  }
+  if (isLocalhost) {
+    const net = new Network('localhost', 31337);
+    return new JsonRpcProvider(url, net, { staticNetwork: net });
+  }
+  return new JsonRpcProvider(url);
+}
 
 let contractInstance: Contract | null = null;
 
@@ -16,7 +30,7 @@ function getRelayContract(): Contract {
   }
 
   if (contractInstance) return contractInstance;
-  const provider = new JsonRpcProvider(rpcUrl);
+  const provider = buildProvider(rpcUrl);
   const signer = new Wallet(privateKey as string, provider);
   contractInstance = new Contract(contractAddress as string, HoneyTraceAbi, signer);
   return contractInstance;

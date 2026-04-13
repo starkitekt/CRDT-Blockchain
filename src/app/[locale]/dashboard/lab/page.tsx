@@ -32,6 +32,7 @@ import PriorStepQR from '@/components/Traceability/PriorStepQR';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
 import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
 import EmptyState from '@/components/EmptyState';
+import CopyableValue from '@/components/CopyableValue';
 
 interface LabFormValues {
   moisture: string;
@@ -415,7 +416,16 @@ export default function LabDashboard() {
               <div className="flex justify-between items-start mb-spacing-xl">
                 <div>
                   <h4 className="text-h2 !text-white !tracking-normal">{tDashboard('certOfPurity')}</h4>
-                  <p className="text-[10px] text-primary font-mono mt-2 tracking-[0.1em]">{tDashboard('hash')}: {selectedBatchId ? `0x${selectedBatchId.replace(/[^a-zA-Z0-9]/g,'').slice(0,4).toLowerCase()}...F92A` : '--'}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <p className="text-[10px] text-primary font-mono tracking-[0.1em] break-all">
+                      {tDashboard('hash')}: {(() => { const b = pendingBatches.find(x => x.batchId === selectedBatchId || x.id === selectedBatchId); return b?.onChainTxHash || b?.onChainDataHash || '--'; })()}
+                    </p>
+                    <CopyableValue
+                      value={(() => { const b = pendingBatches.find(x => x.batchId === selectedBatchId || x.id === selectedBatchId); return b?.onChainTxHash || b?.onChainDataHash || '--'; })()}
+                      label="Copy Hash"
+                      className="text-primary min-h-0 h-6 px-2"
+                    />
+                  </div>
                 </div>
                 <Tag type="green" className="!bg-success !text-white !rounded-md font-bold border-none px-4 py-2 ring-4 ring-success/20">{tDashboard('nablCompliant')}</Tag>
               </div>

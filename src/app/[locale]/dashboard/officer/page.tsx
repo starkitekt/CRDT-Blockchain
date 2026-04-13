@@ -24,13 +24,14 @@ import {
 import { CheckmarkFilled, WarningAltFilled, Stamp, View, CloseFilled } from '@carbon/icons-react';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useBatches } from '@/hooks/useBatches';
-import { batchesApi, recallsApi, labApi, ApiError } from '@/lib/api';
+import { batchesApi, labApi, ApiError } from '@/lib/api';
 import GuidedTour from '@/components/Onboarding/GuidedTour';
 import IdentityVerificationModal from '@/components/Onboarding/IdentityVerificationModal';
 import PriorStepQR from '@/components/Traceability/PriorStepQR';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
 import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
 import RecallManagementModal from '@/components/Traceability/RecallManagementModal';
+import CopyableValue from '@/components/CopyableValue';
 
 export default function OfficerDashboard() {
   const currentUser = useCurrentUser();
@@ -62,8 +63,8 @@ export default function OfficerDashboard() {
   const rows = batches.map(b => ({
     id:        b.id,
     batchId:   b.batchId,
-    batch:     `${b.batchId || b.id} â€” ${b.floraType}`,
-    origin:    `${b.latitude}Â° N, ${b.longitude}Â° E`,
+    batch:     `${b.batchId || b.id} — ${b.floraType}`,
+    origin:    `${b.latitude}° N, ${b.longitude}° E`,
     labResult: `Grade ${b.grade}`,
     statusKey: b.status,
     status:    b.status === 'certified' ? tDashboard('approved')
@@ -171,7 +172,7 @@ export default function OfficerDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-spacing-lg">
         <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
           <p className="text-caption mb-spacing-md tracking-widest uppercase !text-slate-400">{tDashboard('pending_approval')}</p>
-          <h2 className="text-h1 text-gradient">{batchesLoading ? 'â€”' : pendingCount}</h2>
+          <h2 className="text-h1 text-gradient">{batchesLoading ? '—' : pendingCount}</h2>
           <div className="mt-4 flex items-center gap-2">
             <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
             <span className="text-[10px] font-bold text-primary uppercase">{tDashboard('needs_review')}</span>
@@ -179,7 +180,7 @@ export default function OfficerDashboard() {
         </Tile>
         <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
           <p className="text-caption mb-spacing-md tracking-widest uppercase !text-slate-400">{tDashboard('approved_today')}</p>
-          <h2 className="text-h1 text-gradient">{batchesLoading ? 'â€”' : certifiedToday}</h2>
+          <h2 className="text-h1 text-gradient">{batchesLoading ? '—' : certifiedToday}</h2>
           <div className="mt-4 text-[10px] font-bold text-success uppercase">{tDashboard('signed_success')}</div>
         </Tile>
         <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
@@ -289,7 +290,7 @@ export default function OfficerDashboard() {
       <Modal
         open={confirmAction !== null}
         modalHeading={confirmAction === 'approve' ? tDashboard('approve_batch') : tDashboard('flag_for_audit')}
-        primaryButtonText={actionLoading ? 'Processingâ€¦' : confirmAction === 'approve' ? tDashboard('approve_batch') : tDashboard('flag_for_audit')}
+        primaryButtonText={actionLoading ? 'Processing…' : confirmAction === 'approve' ? tDashboard('approve_batch') : tDashboard('flag_for_audit')}
         secondaryButtonText="Cancel"
         danger={confirmAction === 'flag'}
         primaryButtonDisabled={actionLoading}
@@ -305,7 +306,7 @@ export default function OfficerDashboard() {
             : `You are flagging batch ${actionBatch} for field audit. The batch will be held pending investigation.`}
         </p>
         <div className="p-spacing-md bg-slate-50 rounded-xl border border-slate-100 font-mono text-[11px] text-slate-600">
-          IMMUTABLE_PAYLOAD: {confirmAction?.toUpperCase()}_BATCH_{actionBatch} Â· OFFICER: {currentUser.userId || '--'} Â· {signTimestamp}
+          IMMUTABLE_PAYLOAD: {confirmAction?.toUpperCase()}_BATCH_{actionBatch} · OFFICER: {currentUser.userId || '--'} · {signTimestamp}
         </div>
       </Modal>
 
@@ -363,8 +364,8 @@ export default function OfficerDashboard() {
           />
           <BlockchainMapStamp 
             locationName={tDashboard('map_location_name')}
-            latitude="23.2599Â° N"
-            longitude="77.4126Â° E"
+            latitude="23.2599° N"
+            longitude="77.4126° E"
             utcTime={new Date().toISOString().substring(11, 19)}
           />
           <Tile className="glass-panel bg-slate-950 text-white p-spacing-xl rounded-3xl shadow-2xl relative overflow-hidden group elevation-premium border-none">
@@ -379,11 +380,16 @@ export default function OfficerDashboard() {
                 {JSON.stringify({
                   batch: comparisonBatch?.batchId || comparisonBatch?.id || '--',
                   verified_by: currentUser.userId || '--',
-                  hash: comparisonBatch?.batchId ? `0x${comparisonBatch.batchId.replace(/[^a-zA-Z0-9]/g,'').slice(0,4).toLowerCase()}...${comparisonBatch.batchId.replace(/[^a-zA-Z0-9]/g,'').slice(-4).toLowerCase()}` : 'pending',
+                  hash: comparisonBatch?.onChainTxHash || comparisonBatch?.onChainDataHash || 'pending',
                   status: 'APPROVED',
                   timestamp: signTimestamp,
                 }, null, 2)}
               </div>
+              <CopyableValue
+                value={comparisonBatch?.onChainTxHash || comparisonBatch?.onChainDataHash || '--'}
+                label="Copy Hash"
+                className="text-primary mt-3 min-h-0 h-7 px-2"
+              />
             </div>
             <Stack gap={4}>
               <Button size="lg" kind="primary" renderIcon={CheckmarkFilled} className="w-full !max-w-none h-14 !rounded-xl shadow-2xl" onClick={() => { if (comparisonBatch) { setActionBatch(comparisonBatch.batchId); setConfirmAction('approve'); } }}>
@@ -403,5 +409,3 @@ export default function OfficerDashboard() {
     </UnifiedDashboardLayout>
   );
 }
-
-

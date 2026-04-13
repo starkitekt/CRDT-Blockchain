@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { connectDB } from '@/lib/mongodb';
 import { User } from '@/lib/models/User';
 import { signToken } from '@/lib/auth';
+
+function generateBlockchainId(email: string): string {
+  const hash = crypto.createHash('sha256').update(`honeytrace:${email}:${Date.now()}`).digest('hex');
+  return `0x${hash.slice(0, 40)}`;
+}
 
 const RegisterSchema = z.object({
   name:     z.string().min(2).max(100),
@@ -36,6 +42,8 @@ export async function POST(req: NextRequest) {
 
   const passwordHash = await bcrypt.hash(password, 12);
 
+  const blockchainId = generateBlockchainId(email);
+
   const user = await User.create({
     name,
     email:        email.toLowerCase(),
@@ -43,6 +51,7 @@ export async function POST(req: NextRequest) {
     role,
     kycCompleted: false,
     isActive:     true,
+    blockchainId,
   });
 
   const token = signToken({

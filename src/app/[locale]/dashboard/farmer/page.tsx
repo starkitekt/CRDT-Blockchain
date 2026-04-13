@@ -33,6 +33,7 @@ import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayo
 import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
 import PriorStepQR from '@/components/Traceability/PriorStepQR';
 import EmptyState from '@/components/EmptyState';
+import CopyableValue from '@/components/CopyableValue';
 
 
 export default function FarmerDashboard({
@@ -399,19 +400,20 @@ export default function FarmerDashboard({
                     <TableHeader className="!bg-transparent !text-caption !text-[10px]">{t('harvestDate')}</TableHeader>
                     <TableHeader className="!bg-transparent !text-caption !text-[10px]">{t('weight_kg')}</TableHeader>
                     <TableHeader className="!bg-transparent !text-caption !text-[10px]">{t('status')}</TableHeader>
+                    <TableHeader className="!bg-transparent !text-caption !text-[10px]">On-Chain TX</TableHeader>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {batches.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4}>
+                      <TableCell colSpan={5}>
                         <EmptyState title="No harvest records yet" description="Submit your first harvest using the 'Record New Harvest' button above." />
                       </TableCell>
                     </TableRow>
                   )}
                   {batches.map((batch) => (
                     <TableRow key={batch.id} className="hover:!bg-slate-50 transition-colors border-none group">
-                      <TableCell className="mono-data text-primary font-bold group-hover:pl-4 transition-all">{batch.id}</TableCell>
+                      <TableCell className="mono-data text-primary font-bold group-hover:pl-4 transition-all">{batch.batchId}</TableCell>
                       <TableCell className="text-slate-500 font-medium">{batch.harvestDate}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2 font-bold text-slate-900 font-mono">
@@ -426,6 +428,16 @@ export default function FarmerDashboard({
                         >
                           {batch.status.replace(/_/g, ' ')}
                         </Tag>
+                      </TableCell>
+                      <TableCell>
+                        {batch.onChainTxHash ? (
+                          <div className="flex items-center gap-1">
+                            <span className="font-mono text-[11px] text-teal-700 break-all max-w-[180px]">{batch.onChainTxHash}</span>
+                            <CopyableValue value={batch.onChainTxHash} label="Copy" className="min-h-0 h-6 px-1" />
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">Pending</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
