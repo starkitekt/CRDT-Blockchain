@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Tile,
   Button,
@@ -24,7 +24,7 @@ import {
   Collaborate,
   CheckmarkFilled,
 } from '@carbon/icons-react';
-import { useRouter, usePathname } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { authApi, ApiError } from '@/lib/api';
 
@@ -49,7 +49,6 @@ const DEMO_CREDENTIALS = {
 };
 
 export default function LoginPortal() {
-  const router   = useRouter();
   const pathname = usePathname();
   const t  = useTranslations('Auth');
   const tr = useTranslations('Roles');
@@ -60,9 +59,24 @@ export default function LoginPortal() {
   const [loading, setLoading]         = useState(false);
   const [email, setEmail]             = useState('');
   const [password, setPassword]       = useState('');
+  const [signupName, setSignupName] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [demoFilled, setDemoFilled]   = useState(false);
   const [authError, setAuthError]     = useState<string | null>(null);
+  const [authInfo, setAuthInfo] = useState<string | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  const resolveRoleFromEmail = (value: string): string => {
+    const found = Object.entries(DEMO_CREDENTIALS).find(([, creds]) => creds.email === value);
+    return found ? found[0] : '';
+  };
+
+  const effectiveRole = selectedRole || resolveRoleFromEmail(email);
 
   const handleRoleChange = (roleId: string) => {
     setSelectedRole(roleId);
@@ -80,32 +94,69 @@ export default function LoginPortal() {
     }
   };
 
-  const handleLogin = async (e: React.SyntheticEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleLogin = async () => {
     setAuthError(null);
+    setAuthInfo(null);
+    const roleForLogin = effectiveRole;
+    if (!roleForLogin) {
+      setAuthError('Please select a role before signing in.');
+      return;
+    }
+
     setLoading(true);
     try {
-      await authApi.login(email, password, selectedRole);
-      router.push(`/${locale}/dashboard/${selectedRole}`);
-      router.refresh(); // Force middleware to re-read the new cookie
+      await authApi.login(email, password, roleForLogin);
+      window.location.assign(`/${locale}/dashboard/${roleForLogin}`);
     } catch (err) {
       setAuthError(err instanceof ApiError ? err.message : 'Login failed. Please try again.');
       setLoading(false);
     }
   };
 
-  const handleSignup = (e: React.SyntheticEvent<HTMLFormElement>) => {
+  const handleLoginSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setMode('kyc');
+    void handleLogin();
+  };
+
+  const handleSignup = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthInfo(null);
+    if (!selectedRole) {
+      setAuthError('Please select a role before creating an account.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await authApi.register({
+        name: signupName,
+        email: signupEmail,
+        password: signupPassword,
+        role: selectedRole,
+      });
+      setAuthInfo('Account created. Please sign in and complete KYC verification if prompted.');
+      setEmail(signupEmail);
+      setPassword(signupPassword);
+      setMode('login');
+    } catch (err) {
+      setAuthError(err instanceof ApiError ? err.message : 'Registration failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleKYCSubmit = async () => {
     setAuthError(null);
+    const roleForLogin = effectiveRole;
+    if (!roleForLogin) {
+      setAuthError('Please select a role before continuing verification.');
+      return;
+    }
+
     setLoading(true);
     try {
-      await authApi.login(email, password, selectedRole);
-      router.push(`/${locale}/dashboard/${selectedRole}`);
-      router.refresh();
+      await authApi.login(email, password, roleForLogin);
+      window.location.assign(`/${locale}/dashboard/${roleForLogin}`);
     } catch (err) {
       setAuthError(err instanceof ApiError ? err.message : 'Verification failed. Please try again.');
       setLoading(false);
@@ -138,7 +189,7 @@ export default function LoginPortal() {
           <div className="p-8">
 
             {mode === 'login' && (
-              <form onSubmit={handleLogin}>
+              <form onSubmit={handleLoginSubmit} data-auth-hydrated={isHydrated ? 'true' : 'false'}>
                 <Stack gap={5}>
                   <div>
                     <h2 className="text-2xl font-black text-text-primary">{t('welcomeBack')}</h2>
@@ -151,6 +202,16 @@ export default function LoginPortal() {
                       title="Demo credentials pre-filled."
                       subtitle="You can sign in directly or change the role."
                       hideCloseButton
+                      lowContrast
+                    />
+                  )}
+
+                  {authInfo && (
+                    <InlineNotification
+                      kind="success"
+                      title="Registration successful."
+                      subtitle={authInfo}
+                      onCloseButtonClick={() => setAuthInfo(null)}
                       lowContrast
                     />
                   )}
@@ -202,8 +263,9 @@ export default function LoginPortal() {
                     className="w-full flex justify-center !min-w-full"
                     size="lg"
                     renderIcon={Login}
-                    type="submit"
-                    disabled={loading || !selectedRole}
+                    type="button"
+                    onClick={() => { void handleLogin(); }}
+                    disabled={loading}
                     kind="primary"
                   >
                     {loading ? t('authenticating') : t('signIn')}
@@ -237,6 +299,8 @@ export default function LoginPortal() {
                     placeholder="John Doe"
                     size="lg"
                     required
+                    value={signupName}
+                    onChange={(e) => setSignupName(e.target.value)}
                   />
                   <TextInput
                     id="email-signup"
@@ -244,6 +308,8 @@ export default function LoginPortal() {
                     placeholder="john@example.com"
                     size="lg"
                     required
+                    value={signupEmail}
+                    onChange={(e) => setSignupEmail(e.target.value)}
                   />
                   <TextInput
                     id="password-signup"
@@ -273,9 +339,9 @@ export default function LoginPortal() {
                     size="lg"
                     renderIcon={UserFollow}
                     type="submit"
-                    disabled={!selectedRole}
+                    disabled={!selectedRole || loading}
                   >
-                    {t('continueIdentity')}
+                    {loading ? t('authenticating') : t('continueIdentity')}
                   </Button>
 
                   <div className="text-center">

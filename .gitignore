@@ -40,6 +40,11 @@ yarn-error.log*
 build_error*.log
 build_success*.log
 
+# hardhat
+/artifacts
+/cache
+/typechain-types
+
 # vercel
 .vercel
 

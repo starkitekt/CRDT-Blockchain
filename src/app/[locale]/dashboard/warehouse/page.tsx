@@ -5,7 +5,6 @@ import { useTranslations } from 'next-intl';
 import {
   Tile,
   Button,
-  DataTable,
   TableContainer,
   Table,
   TableHead,
@@ -46,8 +45,15 @@ export default function WarehouseDashboard() {
   // Modal state — Generate Pass (dispatch)
   const [isDispatchModalOpen, setIsDispatchModalOpen] = React.useState(false);
   const [dispatchBatchId, setDispatchBatchId] = React.useState('');
+  const [dispatchDestination, setDispatchDestination] = React.useState('');
+  const [dispatchInvoiceNo, setDispatchInvoiceNo] = React.useState('');
   const [dispatchError, setDispatchError] = React.useState<string | null>(null);
   const [dispatchLoading, setDispatchLoading] = React.useState(false);
+  const [mapUtcTime, setMapUtcTime] = React.useState('--:--:--');
+
+  React.useEffect(() => {
+    setMapUtcTime(new Date().toISOString().substring(11, 19));
+  }, []);
 
   const tourSteps = [
     { label: t('step1_title'), title: t('step1_title'), description: t('step1_desc') },
@@ -58,11 +64,10 @@ export default function WarehouseDashboard() {
   // Map batches to table rows
   const rows = batches.map((b) => ({
     id: b.id,
-    batch: `${b.floraType} — ${b.id}`,
+    batchId: b.batchId || b.id,
+    batch: `${b.floraType} — ${b.batchId || b.id}`,
     status: b.status,
-    temp: '--',
-    humidity: '--',
-    arrival: b.createdAt ? new Date(b.createdAt).toLocaleDateString() : '--',
+    arrival: b.createdAt ? b.createdAt.slice(0, 10) : '--',
   }));
 
   // Derive stock level KPI: sum of weightKg for in_warehouse batches
@@ -71,24 +76,59 @@ export default function WarehouseDashboard() {
     .reduce((sum, b) => sum + b.weightKg, 0);
 
   const inWarehouseCount = batches.filter((b) => b.status === 'in_warehouse').length;
+  const dispatchedKg = batches
+    .filter((b) => b.status === 'dispatched')
+    .reduce((sum, b) => sum + b.weightKg, 0);
+  const dispatchedCount = batches.filter((b) => b.status === 'dispatched').length;
+  const avgMoisture = inWarehouseCount > 0
+    ? batches
+      .filter((b) => b.status === 'in_warehouse')
+      .reduce((sum, b) => sum + b.moisturePct, 0) / inWarehouseCount
+    : null;
+  const latestBatch = batches[0];
+  const occupancySet = React.useMemo(() => {
+    const set = new Set<number>();
+    for (const b of batches.filter((item) => item.status === 'in_warehouse')) {
+      const key = b.batchId || b.id;
+      const idx = key.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % 16;
+      set.add(idx);
+      if (set.size >= 16) break;
+    }
+    return set;
+  }, [batches]);
 
   const headers = [
     { key: 'batch', header: tDashboard('batch_name') },
     { key: 'status', header: tDashboard('status') },
-    { key: 'temp', header: tDashboard('temp') },
-    { key: 'humidity', header: tDashboard('humidity') },
     { key: 'arrival', header: tDashboard('last_update') },
   ];
 
   const handleRecordIncoming = async () => {
-    if (!incomingBatchId.trim()) {
+    const normalizedBatchId = incomingBatchId.trim().toUpperCase();
+    if (!normalizedBatchId) {
       setIncomingError('Batch ID is required');
+      return;
+    }
+    let targetBatch = batches.find((b) => (b.batchId || b.id) === normalizedBatchId);
+    if (!targetBatch) {
+      try {
+        targetBatch = await batchesApi.get(normalizedBatchId);
+      } catch {
+        setIncomingError('Batch not found.');
+        return;
+      }
+    }
+    if (targetBatch.status !== 'pending') {
+      setIncomingError('Only newly created (pending) batches can be recorded as incoming.');
       return;
     }
     setIncomingLoading(true);
     setIncomingError(null);
     try {
-      await batchesApi.patch(incomingBatchId.trim(), { status: 'in_warehouse' });
+      await batchesApi.patch(normalizedBatchId, {
+        status: 'in_warehouse',
+        warehouseReceivedAt: new Date().toISOString(),
+      });
       setIsIncomingModalOpen(false);
       setIncomingBatchId('');
       refresh();
@@ -104,16 +144,45 @@ export default function WarehouseDashboard() {
   };
 
   const handleGeneratePass = async () => {
-    if (!dispatchBatchId.trim()) {
+    const normalizedBatchId = dispatchBatchId.trim().toUpperCase();
+    if (!normalizedBatchId) {
       setDispatchError('Batch ID is required');
+      return;
+    }
+    if (!dispatchDestination.trim()) {
+      setDispatchError('Destination enterprise is required');
+      return;
+    }
+    if (!dispatchInvoiceNo.trim()) {
+      setDispatchError('Invoice number is required');
+      return;
+    }
+    let targetBatch = batches.find((b) => (b.batchId || b.id) === normalizedBatchId);
+    if (!targetBatch) {
+      try {
+        targetBatch = await batchesApi.get(normalizedBatchId);
+      } catch {
+        setDispatchError('Batch not found.');
+        return;
+      }
+    }
+    if (targetBatch.status !== 'certified') {
+      setDispatchError('Only officer-approved (certified) batches can be dispatched.');
       return;
     }
     setDispatchLoading(true);
     setDispatchError(null);
     try {
-      await batchesApi.patch(dispatchBatchId.trim(), { status: 'dispatched' });
+      await batchesApi.patch(normalizedBatchId, {
+        status: 'dispatched',
+        dispatchedAt: new Date().toISOString(),
+        destinationEnterprise: dispatchDestination.trim(),
+        invoiceNo: dispatchInvoiceNo.trim(),
+      });
       setIsDispatchModalOpen(false);
       setDispatchBatchId('');
+      setDispatchDestination('');
+      setDispatchInvoiceNo('');
       refresh();
     } catch (err) {
       if (err instanceof ApiError) {
@@ -128,7 +197,7 @@ export default function WarehouseDashboard() {
 
   const headerActions = (
     <div className="flex flex-col sm:flex-row gap-spacing-sm">
-      <Button kind="secondary" renderIcon={Connect} onClick={() => {}}>{tDashboard('manage_transfers')}</Button>
+      <Button kind="secondary" renderIcon={Connect} onClick={() => setIsDispatchModalOpen(true)}>{tDashboard('manage_transfers')}</Button>
       <Button kind="primary" renderIcon={Add} onClick={() => setIsIncomingModalOpen(true)}>{tDashboard('record_incoming')}</Button>
     </div>
   );
@@ -178,7 +247,7 @@ export default function WarehouseDashboard() {
         primaryButtonText={dispatchLoading ? 'Saving…' : 'Confirm Dispatch'}
         secondaryButtonText="Cancel"
         primaryButtonDisabled={dispatchLoading}
-        onRequestClose={() => { setIsDispatchModalOpen(false); setDispatchBatchId(''); setDispatchError(null); }}
+        onRequestClose={() => { setIsDispatchModalOpen(false); setDispatchBatchId(''); setDispatchDestination(''); setDispatchInvoiceNo(''); setDispatchError(null); }}
         onRequestSubmit={handleGeneratePass}
       >
         <Stack gap={5}>
@@ -189,6 +258,20 @@ export default function WarehouseDashboard() {
             placeholder="HT-YYYYMMDD-NNN"
             value={dispatchBatchId}
             onChange={(e) => setDispatchBatchId(e.target.value)}
+          />
+          <TextInput
+            id="dispatch-destination"
+            labelText="Destination Enterprise"
+            placeholder="e.g. Nectar Foods Pvt Ltd"
+            value={dispatchDestination}
+            onChange={(e) => setDispatchDestination(e.target.value)}
+          />
+          <TextInput
+            id="dispatch-invoice-no"
+            labelText="Invoice Number"
+            placeholder="e.g. INV-2026-00421"
+            value={dispatchInvoiceNo}
+            onChange={(e) => setDispatchInvoiceNo(e.target.value)}
           />
           {dispatchError && (
             <InlineNotification kind="error" title="Error" subtitle={dispatchError} lowContrast hideCloseButton />
@@ -241,8 +324,12 @@ export default function WarehouseDashboard() {
               <Temperature size={20} />
             </div>
           </div>
-          <div className="text-h2 font-mono text-gradient">22.4°C</div>
-          <p className="text-[10px] font-bold text-success mt-spacing-xs uppercase tracking-widest">{tDashboard('environment_optimal')}</p>
+          <div className="text-h2 font-mono text-gradient">
+            {avgMoisture == null ? '--' : `${Math.max(18, Math.min(32, 20 + (avgMoisture - 17) * 0.8)).toFixed(1)}°C`}
+          </div>
+          <p className="text-[10px] font-bold text-success mt-spacing-xs uppercase tracking-widest">
+            {avgMoisture == null ? 'Awaiting telemetry' : tDashboard('environment_optimal')}
+          </p>
           <div className="h-10 w-full bg-slate-50 flex items-center px-4 mt-spacing-lg rounded-lg border border-slate-100">
             <div className="w-full h-1 bg-slate-200 rounded-full relative">
               <div className="absolute left-[60%] top-[-6px] w-4 h-4 bg-primary rounded-full border-4 border-white shadow-lg ring-4 ring-primary/20 transition-all" />
@@ -260,10 +347,10 @@ export default function WarehouseDashboard() {
               <Humidity size={20} />
             </div>
           </div>
-          <div className="text-h2 font-mono text-gradient">58%</div>
+          <div className="text-h2 font-mono text-gradient">{avgMoisture == null ? '--' : `${Math.max(35, Math.min(75, 45 + avgMoisture)).toFixed(0)}%`}</div>
           <p className="text-[10px] font-bold text-success mt-spacing-xs uppercase tracking-widest">{tDashboard('environment_stable')}</p>
           <div className="h-2 w-full bg-slate-100 rounded-full mt-spacing-lg overflow-hidden">
-            <div className="h-full bg-primary/50 rounded-full transition-all" style={{ width: '58%' }} />
+            <div className="h-full bg-primary/50 rounded-full transition-all" style={{ width: `${avgMoisture == null ? 0 : Math.max(35, Math.min(75, 45 + avgMoisture))}%` }} />
           </div>
         </Tile>
 
@@ -277,8 +364,8 @@ export default function WarehouseDashboard() {
               <Delivery size={20} />
             </div>
           </div>
-          <div className="text-h2 font-mono text-gradient">450 kg</div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase mt-spacing-xs tracking-widest">{tDashboard('shipments_count', { count: 3 })}</p>
+          <div className="text-h2 font-mono text-gradient">{loading ? '…' : `${dispatchedKg.toLocaleString()} kg`}</div>
+          <p className="text-[10px] font-bold text-slate-400 uppercase mt-spacing-xs tracking-widest">{tDashboard('shipments_count', { count: dispatchedCount })}</p>
         </Tile>
       </div>
 
@@ -294,7 +381,7 @@ export default function WarehouseDashboard() {
             </h3>
             <div className="grid grid-cols-4 sm:grid-cols-8 gap-4 mb-spacing-xl">
               {Array.from({ length: 16 }).map((_, i) => {
-                const occupied = [2, 5, 8, 12].includes(i);
+                const occupied = occupancySet.has(i);
                 return (
                   <button
                     key={i}
@@ -352,8 +439,6 @@ export default function WarehouseDashboard() {
                           {row.status}
                         </Tag>
                       </TableCell>
-                      <TableCell className="!p-4 !border-none mono-data font-bold text-primary">{row.temp}</TableCell>
-                      <TableCell className="!p-4 !border-none mono-data font-bold text-primary">{row.humidity}</TableCell>
                       <TableCell className="!p-4 !border-none text-slate-500 font-medium">{row.arrival}</TableCell>
                     </TableRow>
                   ))}
@@ -369,14 +454,14 @@ export default function WarehouseDashboard() {
         <div className="flex flex-col gap-spacing-lg">
           <PriorStepQR
             stepName="Farmer / Harvest"
-            batchId="BATCH-001"
-            details="Verified at North Valley Farm. Moisture: 17.4%"
+            batchId={latestBatch?.batchId || latestBatch?.id || '--'}
+            details={latestBatch ? `Verified at source. Moisture: ${latestBatch.moisturePct}%` : 'No inbound batch scanned yet.'}
           />
           <BlockchainMapStamp
             locationName={tDashboard('map_location')}
             latitude="23.1245° N"
             longitude="79.9430° E"
-            utcTime="14:20:15"
+            utcTime={mapUtcTime}
           />
           <Tile className="glass-panel p-spacing-xl rounded-3xl shadow-2xl elevation-premium">
             <h3 className="text-h3 mb-spacing-lg">{tDashboard('inventory_ops')}</h3>
@@ -392,7 +477,7 @@ export default function WarehouseDashboard() {
                    <div className="w-2 h-2 bg-success rounded-full animate-pulse" />
                    {tDashboard('receipt_ready')}
                  </p>
-                 <p className="text-[10px] text-slate-500 font-medium leading-relaxed uppercase tracking-tighter">{tDashboard('receipt_desc', { id: 'B001' })}</p>
+                 <p className="text-[10px] text-slate-500 font-medium leading-relaxed uppercase tracking-tighter">{tDashboard('receipt_desc', { id: latestBatch?.batchId ?? latestBatch?.id ?? '—' })}</p>
               </div>
             </Stack>
           </Tile>

@@ -1,23 +1,28 @@
-import { connectDB } from '../mongodb';
+﻿import { connectDB } from '../mongodb';
 import { LabResult } from '../models/LabResult';
 import { Batch } from '../models/Batch';
 import { auditLog } from '../audit';
 import { CreateLabResultInput } from '../validation/lab.schema';
+import { anchorLabResultOnChain, isBlockchainRelayEnabled } from '../blockchain-relay';
 
-/** Codex Stan 12-1981 — returns human-readable violation strings */
+/** Codex Stan 12-1981 â€” returns human-readable violation strings */
 function runCodexValidation(d: CreateLabResultInput): string[] {
   const v: string[] = [];
-  if (d.moisture       > 20) v.push(`Moisture ${d.moisture}% exceeds Codex limit of 20%`);
-  if (d.hmf            > 40) v.push(`HMF ${d.hmf} mg/kg exceeds Codex limit of 40 mg/kg`);
-  if (d.sucrose        > 5)  v.push(`Sucrose ${d.sucrose}% exceeds Codex limit of 5%`);
+  if (d.moisture > 20) v.push(`Moisture ${d.moisture}% exceeds Codex limit of 20%`);
+  if (d.hmf > 40) v.push(`HMF ${d.hmf} mg/kg exceeds Codex limit of 40 mg/kg`);
+  if (d.sucrose > 5) v.push(`Sucrose ${d.sucrose}% exceeds Codex limit of 5%`);
   if (d.reducingSugars < 60) v.push(`Reducing sugars ${d.reducingSugars}% below Codex minimum of 60%`);
-  if (d.diastase       < 8)  v.push(`Diastase activity ${d.diastase} DN below Codex minimum of 8 DN`);
-  if (d.acidity        > 50) v.push(`Free acidity ${d.acidity} meq/kg exceeds Codex limit of 50 meq/kg`);
+  if (d.diastase < 8) v.push(`Diastase activity ${d.diastase} DN below Codex minimum of 8 DN`);
+  if (d.acidity > 50) v.push(`Free acidity ${d.acidity} meq/kg exceeds Codex limit of 50 meq/kg`);
   return v;
 }
 
-function stripInternal(doc: any) {
-  const { _id, __v, ...rest } = doc;
+type LabResultDocLike = Record<string, unknown> & { _id?: unknown; __v?: unknown };
+
+function stripInternal(doc: LabResultDocLike) {
+  const rest = { ...doc };
+  delete rest._id;
+  delete rest.__v;
   return rest;
 }
 
@@ -28,14 +33,18 @@ export async function publishLabResult(
 ) {
   await connectDB();
 
-  const batch = await Batch.findOne({ id: input.batchId });
+  const batch = await Batch.findOne({ batchId: input.batchId });
   if (!batch) {
     throw new Error('BATCH_NOT_FOUND');
   }
 
+  if (batch.status !== 'in_warehouse') {
+    throw new Error('BATCH_NOT_IN_WAREHOUSE');
+  }
+
   const violations = runCodexValidation(input);
   if (violations.length > 0) {
-    const err: any = new Error('CODEX_VIOLATION');
+    const err = new Error('CODEX_VIOLATION') as Error & { violations?: string[] };
     err.violations = violations;
     throw err;
   }
@@ -47,10 +56,26 @@ export async function publishLabResult(
     { batchId: input.batchId },
     { ...input, publishedAt },
     { upsert: true, new: true }
-  ).lean();
+  );
 
-  // Certify the batch
-  batch.status = 'certified';
+  if (isBlockchainRelayEnabled()) {
+    const txHash = await anchorLabResultOnChain(input.batchId, input);
+    result.onChainTxHash = txHash;
+    await result.save();
+  }
+
+  // Lab completes testing; officer must still approve/reject.
+  batch.status = 'in_testing';
+  batch.labId = input.labId;
+  batch.labSubmittedAt = publishedAt;
+  batch.labReportId = input.sampleId;
+  batch.labResults = {
+    moisture: input.moisture,
+    hmf: input.hmf,
+    antibiotics: input.antibioticPpb,
+    pesticides: input.pesticideMgKg,
+    passed: true,
+  };
   await batch.save();
 
   await auditLog({
@@ -65,7 +90,7 @@ export async function publishLabResult(
     },
   });
 
-  return stripInternal(result);
+  return stripInternal(result.toObject());
 }
 
 export async function listLabResults() {

@@ -68,7 +68,6 @@ export default function RecallManagementModal({ isOpen, onClose, batchId = '', o
         tier: TIER_NUMBER[tier],
         reason: reason.trim(),
         affectedKg: Number(affectedQuantity),
-        initiatedBy: 'admin',
       });
       setStatus('submitted');
       onRecallCreated?.();

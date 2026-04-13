@@ -1,7 +1,9 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
+import type { LabResult } from '@/types';
 import {
   Tile,
   Button,
@@ -22,16 +24,16 @@ import {
 import { CheckmarkFilled, WarningAltFilled, Stamp, View, CloseFilled } from '@carbon/icons-react';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useBatches } from '@/hooks/useBatches';
-import { batchesApi, recallsApi, ApiError } from '@/lib/api';
+import { batchesApi, recallsApi, labApi, ApiError } from '@/lib/api';
 import GuidedTour from '@/components/Onboarding/GuidedTour';
 import IdentityVerificationModal from '@/components/Onboarding/IdentityVerificationModal';
 import PriorStepQR from '@/components/Traceability/PriorStepQR';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
 import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
 import RecallManagementModal from '@/components/Traceability/RecallManagementModal';
-import type { RecallTier } from '@/types';
 
 export default function OfficerDashboard() {
+  const currentUser = useCurrentUser();
   const tOnboarding = useTranslations('Onboarding.officer');
   const tDashboard = useTranslations('Dashboard.officer');
   const { isTourOpen, isKYCOpen, completeKYC, completeTour, closeTour } = useOnboarding({ role: 'officer', hasKYC: true });
@@ -39,13 +41,16 @@ export default function OfficerDashboard() {
   const [isRecallOpen, setIsRecallOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'approve' | 'flag' | null>(null);
   const [actionBatch, setActionBatch] = useState('');
-  const [approvedBatches, setApprovedBatches] = useState<string[]>([]);
-  const [flaggedBatches, setFlaggedBatches] = useState<string[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [selectedAuditBatch, setSelectedAuditBatch] = useState<string>('');
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewLabReport, setReviewLabReport] = useState<LabResult | null>(null);
   useEffect(() => { setSignTimestamp(new Date().toISOString()); }, []);
 
-  // ── Data ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const { batches, loading: batchesLoading, refresh } = useBatches();
 
   const tourSteps = [
@@ -56,11 +61,13 @@ export default function OfficerDashboard() {
 
   const rows = batches.map(b => ({
     id:        b.id,
-    batch:     `${b.id} — ${b.floraType}`,
-    origin:    `${b.latitude}° N, ${b.longitude}° E`,
+    batchId:   b.batchId,
+    batch:     `${b.batchId || b.id} â€” ${b.floraType}`,
+    origin:    `${b.latitude}Â° N, ${b.longitude}Â° E`,
     labResult: `Grade ${b.grade}`,
-    status:    approvedBatches.includes(b.id) ? tDashboard('approved')
-             : flaggedBatches.includes(b.id)  ? tDashboard('flagged_batches')
+    statusKey: b.status,
+    status:    b.status === 'certified' ? tDashboard('approved')
+             : b.status === 'recalled'  ? tDashboard('flagged_batches')
              : b.status.replace(/_/g, ' '),
   }));
 
@@ -71,7 +78,23 @@ export default function OfficerDashboard() {
     { key: 'status',    header: tDashboard('status') },
   ];
 
-  // ── Approve / flag handlers ───────────────────────────────────────────────
+  const handleReviewBatch = async (batchId: string) => {
+    setSelectedAuditBatch(batchId);
+    setIsReviewOpen(true);
+    setReviewLoading(true);
+    setReviewError(null);
+    setReviewLabReport(null);
+    try {
+      const report = await labApi.getByBatch(batchId);
+      setReviewLabReport(report);
+    } catch (err) {
+      setReviewError(err instanceof ApiError ? err.message : 'Unable to load lab report.');
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  // â”€â”€ Approve / flag handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleConfirmAction = async () => {
     if (!actionBatch || !confirmAction) return;
     setActionLoading(true);
@@ -79,16 +102,9 @@ export default function OfficerDashboard() {
     try {
       if (confirmAction === 'approve') {
         await batchesApi.patch(actionBatch, { status: 'certified' });
-        setApprovedBatches(p => [...p, actionBatch]);
       } else {
-        await recallsApi.create({
-          batchId:     actionBatch,
-          tier:        2 as RecallTier,
-          reason:      'Officer flagged for field audit',
-          affectedKg:  0,
-          initiatedBy: 'GOVT-OFC-04',
-        });
-        setFlaggedBatches(p => [...p, actionBatch]);
+        await batchesApi.patch(actionBatch, { status: 'recalled' });
+        setIsRecallOpen(true);
       }
       refresh();
       setConfirmAction(null);
@@ -101,8 +117,17 @@ export default function OfficerDashboard() {
 
   // KPIs from live data
   const pendingCount   = batches.filter(b => b.status === 'pending' || b.status === 'in_warehouse').length;
-  const certifiedToday = batches.filter(b => approvedBatches.includes(b.id)).length;
-  const flaggedCount   = flaggedBatches.length;
+  const certifiedToday = batches.filter(b => b.status === 'certified').length;
+  const flaggedCount   = batches.filter(b => b.status === 'recalled').length;
+  const fieldAuditCount = batches.filter((b) => b.status === 'in_testing').length;
+  const comparisonBatch = batches.find((b) => b.batchId === selectedAuditBatch) || batches[0] || null;
+  const comparisonDelta = comparisonBatch ? Number(Math.max(0, 20 - comparisonBatch.moisturePct).toFixed(1)) : 0;
+
+  useEffect(() => {
+    if (!selectedAuditBatch && batches.length > 0) {
+      setSelectedAuditBatch(batches[0].batchId);
+    }
+  }, [batches, selectedAuditBatch]);
 
   const headerActions = (
     <div className="w-full md:w-80">
@@ -146,7 +171,7 @@ export default function OfficerDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-spacing-lg">
         <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
           <p className="text-caption mb-spacing-md tracking-widest uppercase !text-slate-400">{tDashboard('pending_approval')}</p>
-          <h2 className="text-h1 text-gradient">{batchesLoading ? '—' : pendingCount}</h2>
+          <h2 className="text-h1 text-gradient">{batchesLoading ? 'â€”' : pendingCount}</h2>
           <div className="mt-4 flex items-center gap-2">
             <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
             <span className="text-[10px] font-bold text-primary uppercase">{tDashboard('needs_review')}</span>
@@ -154,12 +179,12 @@ export default function OfficerDashboard() {
         </Tile>
         <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
           <p className="text-caption mb-spacing-md tracking-widest uppercase !text-slate-400">{tDashboard('approved_today')}</p>
-          <h2 className="text-h1 text-gradient">{batchesLoading ? '—' : certifiedToday}</h2>
+          <h2 className="text-h1 text-gradient">{batchesLoading ? 'â€”' : certifiedToday}</h2>
           <div className="mt-4 text-[10px] font-bold text-success uppercase">{tDashboard('signed_success')}</div>
         </Tile>
         <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
           <p className="text-caption mb-spacing-md tracking-widest uppercase !text-slate-400">{tDashboard('field_audits_req')}</p>
-          <h2 className="text-h1 text-gradient">5</h2>
+          <h2 className="text-h1 text-gradient">{fieldAuditCount}</h2>
           <div className="mt-4 text-[10px] font-bold text-warning uppercase">{tDashboard('site_visit_needed')}</div>
         </Tile>
         <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium border-b-4 border-error relative overflow-hidden group">
@@ -181,21 +206,24 @@ export default function OfficerDashboard() {
                </div>
                {tDashboard('comparison_stack')}
              </h3>
+             <p className="text-[11px] text-slate-500 font-semibold mb-spacing-md">
+               Reviewing batch: <span className="font-mono text-slate-800">{comparisonBatch?.batchId || comparisonBatch?.id || '--'}</span>
+             </p>
              <div className="space-y-spacing-lg">
                 <div className="p-spacing-lg bg-red-50/50 border-2 border-error/20 rounded-2xl relative shadow-inner ring-4 ring-red-50/20 group hover:scale-[1.01] transition-transform">
                    <div className="absolute right-spacing-md top-spacing-md">
                       <Tag type="red" className="!rounded-md font-bold uppercase tracking-widest text-[10px] border-none shadow-md">{tDashboard('discrepancy_alert')}</Tag>
                    </div>
-                   <p className="text-[10px] font-bold text-error mb-4 uppercase tracking-[0.2em]">{tDashboard('batch_analysis')}: <span className="mono-data font-bold">{tDashboard('batch')}-1204</span></p>
+                   <p className="text-[10px] font-bold text-error mb-4 uppercase tracking-[0.2em]">{tDashboard('batch_analysis')}: <span className="mono-data font-bold">{comparisonBatch?.batchId || comparisonBatch?.id || '--'}</span></p>
                    <div className="grid grid-cols-1 md:grid-cols-3 gap-spacing-lg">
                       <div className="flex flex-col p-4 bg-white/60 rounded-xl border border-error/10">
                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">{tDashboard('purity_variance')}</span>
-                         <span className="text-lg font-bold text-error">{tDashboard('purity_diff', { value: 3.4 })}</span>
-                         <span className="text-[10px] text-slate-500 font-medium mt-1">{tDashboard('farmer')}: 98% | {tDashboard('lab')}: 94.6%</span>
+                         <span className="text-lg font-bold text-error">{tDashboard('purity_diff', { value: comparisonDelta })}</span>
+                         <span className="text-[10px] text-slate-500 font-medium mt-1">{tDashboard('farmer')}: {comparisonBatch ? (100 - comparisonBatch.moisturePct).toFixed(1) : '--'}% | {tDashboard('lab')}: {comparisonBatch?.labResults?.moisture != null ? (100 - comparisonBatch.labResults.moisture).toFixed(1) : '--'}%</span>
                       </div>
                       <div className="flex flex-col p-4 bg-white/60 rounded-xl border border-slate-100">
                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">{tDashboard('weight_mismatch')}</span>
-                         <span className="text-lg font-bold text-success">{tDashboard('weight_ok', { value: 0.2 })}</span>
+                         <span className="text-lg font-bold text-success">{tDashboard('weight_ok', { value: comparisonBatch ? Number((comparisonBatch.weightKg * 0.002).toFixed(1)) : 0 })}</span>
                          <span className="text-[10px] text-slate-500 font-medium mt-1">{tDashboard('within_threshold')}</span>
                       </div>
                       <div className="flex flex-col p-4 bg-white/60 rounded-xl border border-slate-100">
@@ -226,14 +254,14 @@ export default function OfficerDashboard() {
                     </TableHead>
                     <TableBody>
                       {rows.map((row) => (
-                        <TableRow key={row.id} className="hover:!bg-slate-50 transition-colors border-none group">
+                        <TableRow key={row.id} className={`${selectedAuditBatch === row.batchId ? '!bg-primary/5 ring-1 ring-primary/20' : 'hover:!bg-slate-50'} transition-colors border-none group`}>
                           <TableCell className="!p-4 !border-none group-hover:pl-6 transition-all font-bold text-slate-900">{row.batch}</TableCell>
                           <TableCell className="!p-4 !border-none text-slate-500 font-medium font-mono text-[11px]">{row.origin}</TableCell>
                           <TableCell className="!p-4 !border-none font-bold text-slate-900">{row.labResult}</TableCell>
                           <TableCell className="!p-4 !border-none">
                             <Tag
-                              type={approvedBatches.includes(row.id) ? 'green' : flaggedBatches.includes(row.id) ? 'red' : 'blue'}
-                              renderIcon={approvedBatches.includes(row.id) ? CheckmarkFilled : WarningAltFilled}
+                              type={row.statusKey === 'certified' ? 'green' : row.statusKey === 'recalled' ? 'red' : 'blue'}
+                              renderIcon={row.statusKey === 'certified' ? CheckmarkFilled : WarningAltFilled}
                               className="!rounded-md font-bold uppercase tracking-widest text-[10px] px-3 border-none shadow-sm"
                             >
                               {row.status}
@@ -241,10 +269,10 @@ export default function OfficerDashboard() {
                           </TableCell>
                           <TableCell className="!p-4 !border-none">
                             <div className="flex gap-2">
-                              <Button hasIconOnly renderIcon={View} iconDescription={tDashboard('review_action')} size="sm" kind="ghost" className="!rounded-lg hover:!bg-white shadow-sm ring-1 ring-slate-100" />
+                              <Button hasIconOnly renderIcon={View} iconDescription={tDashboard('review_action')} size="sm" kind={selectedAuditBatch === row.batchId ? 'secondary' : 'ghost'} className="!rounded-lg hover:!bg-white shadow-sm ring-1 ring-slate-100" onClick={() => handleReviewBatch(row.batchId)} />
                               <Button hasIconOnly renderIcon={Stamp} iconDescription={tDashboard('approve_action')} size="sm" kind="ghost" className="!rounded-lg hover:!bg-white shadow-sm ring-1 ring-slate-100"
-                                disabled={approvedBatches.includes(row.id)}
-                                onClick={() => { setActionBatch(row.id); setConfirmAction('approve'); }} />
+                                disabled={row.statusKey === 'certified'}
+                                onClick={() => { setActionBatch(row.batchId); setConfirmAction('approve'); }} />
                             </div>
                           </TableCell>
                         </TableRow>
@@ -261,7 +289,7 @@ export default function OfficerDashboard() {
       <Modal
         open={confirmAction !== null}
         modalHeading={confirmAction === 'approve' ? tDashboard('approve_batch') : tDashboard('flag_for_audit')}
-        primaryButtonText={actionLoading ? 'Processing…' : confirmAction === 'approve' ? tDashboard('approve_batch') : tDashboard('flag_for_audit')}
+        primaryButtonText={actionLoading ? 'Processingâ€¦' : confirmAction === 'approve' ? tDashboard('approve_batch') : tDashboard('flag_for_audit')}
         secondaryButtonText="Cancel"
         danger={confirmAction === 'flag'}
         primaryButtonDisabled={actionLoading}
@@ -277,21 +305,67 @@ export default function OfficerDashboard() {
             : `You are flagging batch ${actionBatch} for field audit. The batch will be held pending investigation.`}
         </p>
         <div className="p-spacing-md bg-slate-50 rounded-xl border border-slate-100 font-mono text-[11px] text-slate-600">
-          IMMUTABLE_PAYLOAD: {confirmAction?.toUpperCase()}_BATCH_{actionBatch} · OFFICER: GOVT-OFC-04 · {signTimestamp}
+          IMMUTABLE_PAYLOAD: {confirmAction?.toUpperCase()}_BATCH_{actionBatch} Â· OFFICER: {currentUser.userId || '--'} Â· {signTimestamp}
         </div>
+      </Modal>
+
+      <Modal
+        open={isReviewOpen}
+        modalHeading={`Lab Report Review • ${selectedAuditBatch || '--'}`}
+        primaryButtonText="Close"
+        secondaryButtonText=""
+        passiveModal={false}
+        onRequestClose={() => setIsReviewOpen(false)}
+        onRequestSubmit={() => setIsReviewOpen(false)}
+      >
+        {reviewLoading && <p className="text-body">Loading lab report...</p>}
+        {!reviewLoading && reviewError && (
+          <InlineNotification
+            kind="error"
+            title="Lab report unavailable."
+            subtitle={reviewError}
+            onCloseButtonClick={() => setReviewError(null)}
+            lowContrast
+          />
+        )}
+        {!reviewLoading && !reviewError && !reviewLabReport && (
+          <p className="text-body">No lab report found for this batch.</p>
+        )}
+        {!reviewLoading && reviewLabReport && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div><strong>Batch ID:</strong> {reviewLabReport.batchId}</div>
+            <div><strong>Sample ID:</strong> {reviewLabReport.sampleId}</div>
+            <div><strong>Lab ID:</strong> {reviewLabReport.labId}</div>
+            <div><strong>FSSAI License:</strong> {reviewLabReport.fssaiLicense}</div>
+            <div><strong>NABL Cert:</strong> {reviewLabReport.nablCert}</div>
+            <div><strong>Published:</strong> {reviewLabReport.publishedAt || '--'}</div>
+            <div><strong>Moisture %:</strong> {reviewLabReport.moisture}</div>
+            <div><strong>HMF (mg/kg):</strong> {reviewLabReport.hmf}</div>
+            <div><strong>Pollen Count:</strong> {reviewLabReport.pollenCount}</div>
+            <div><strong>Acidity (meq/kg):</strong> {reviewLabReport.acidity}</div>
+            <div><strong>Diastase:</strong> {reviewLabReport.diastase}</div>
+            <div><strong>Sucrose (g/100g):</strong> {reviewLabReport.sucrose}</div>
+            <div><strong>Reducing Sugars (g/100g):</strong> {reviewLabReport.reducingSugars}</div>
+            <div><strong>Conductivity (mS/cm):</strong> {reviewLabReport.conductivity}</div>
+            <div><strong>Antibiotic (ppb):</strong> {reviewLabReport.antibioticPpb ?? '--'}</div>
+            <div><strong>Pesticide (mg/kg):</strong> {reviewLabReport.pesticideMgKg ?? '--'}</div>
+            <div><strong>Heavy Metals (mg/kg):</strong> {reviewLabReport.heavyMetalsMgKg ?? '--'}</div>
+            <div><strong>NMR Score:</strong> {reviewLabReport.nmrScore ?? '--'}</div>
+          </div>
+        )}
       </Modal>
 
         <div className="flex flex-col gap-spacing-lg">
           <PriorStepQR
             stepName={tDashboard('prior_step_name')}
-            batchId="LAB-QR-901"
+            batchId={comparisonBatch?.batchId || comparisonBatch?.id || '--'}
             details={tDashboard('prior_step_details')}
           />
           <BlockchainMapStamp 
             locationName={tDashboard('map_location_name')}
-            latitude="23.2599° N"
-            longitude="77.4126° E"
-            utcTime="10:30:22"
+            latitude="23.2599Â° N"
+            longitude="77.4126Â° E"
+            utcTime={new Date().toISOString().substring(11, 19)}
           />
           <Tile className="glass-panel bg-slate-950 text-white p-spacing-xl rounded-3xl shadow-2xl relative overflow-hidden group elevation-premium border-none">
             <div className="absolute right-[-20px] bottom-[-20px] opacity-10 group-hover:scale-110 transition-transform duration-[2000ms] text-primary">
@@ -302,20 +376,20 @@ export default function OfficerDashboard() {
             </h3>
             <div className="bg-white/5 backdrop-blur-xl p-spacing-xl border border-white/10 rounded-2xl relative z-10 ring-1 ring-white/10 mb-8">
               <div className="font-mono text-[10px] text-primary/80 leading-relaxed overflow-x-auto">
-                {`{
-  "batch": "1204",
-  "verified_by": "GOVT-OFC-04",
-  "hash": "0x9df1...a2e8",
-  "status": "APPROVED",
-  "timestamp": "${signTimestamp}"
-}`}
+                {JSON.stringify({
+                  batch: comparisonBatch?.batchId || comparisonBatch?.id || '--',
+                  verified_by: currentUser.userId || '--',
+                  hash: comparisonBatch?.batchId ? `0x${comparisonBatch.batchId.replace(/[^a-zA-Z0-9]/g,'').slice(0,4).toLowerCase()}...${comparisonBatch.batchId.replace(/[^a-zA-Z0-9]/g,'').slice(-4).toLowerCase()}` : 'pending',
+                  status: 'APPROVED',
+                  timestamp: signTimestamp,
+                }, null, 2)}
               </div>
             </div>
             <Stack gap={4}>
-              <Button size="lg" kind="primary" renderIcon={CheckmarkFilled} className="w-full !max-w-none h-14 !rounded-xl shadow-2xl" onClick={() => { setActionBatch('1204'); setConfirmAction('approve'); }}>
+              <Button size="lg" kind="primary" renderIcon={CheckmarkFilled} className="w-full !max-w-none h-14 !rounded-xl shadow-2xl" onClick={() => { if (comparisonBatch) { setActionBatch(comparisonBatch.batchId); setConfirmAction('approve'); } }}>
                  <span className="font-bold group-hover:mr-2 transition-all">{tDashboard('approve_batch')}</span>
               </Button>
-              <Button size="lg" kind="ghost" renderIcon={CloseFilled} className="w-full !max-w-none h-14 !rounded-xl border border-red-300 !text-red-400 hover:!bg-red-950/30" onClick={() => { setActionBatch('HT-20240312-012'); setIsRecallOpen(true); }}>
+              <Button size="lg" kind="ghost" renderIcon={CloseFilled} className="w-full !max-w-none h-14 !rounded-xl border border-red-300 !text-red-400 hover:!bg-red-950/30" onClick={() => { if (comparisonBatch) { setActionBatch(comparisonBatch.batchId); setIsRecallOpen(true); } }}>
                 <span className="font-bold">{tDashboard('flag_for_audit')}</span>
               </Button>
             </Stack>
@@ -329,3 +403,5 @@ export default function OfficerDashboard() {
     </UnifiedDashboardLayout>
   );
 }
+
+

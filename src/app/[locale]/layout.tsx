@@ -1,3 +1,4 @@
+import '@/lib/env';
 import type { Metadata, Viewport } from 'next';
 import {NextIntlClientProvider} from 'next-intl';
 import {getMessages} from 'next-intl/server';
@@ -5,6 +6,7 @@ import {IBM_Plex_Sans, Noto_Sans_Devanagari, DM_Sans} from 'next/font/google';
 import '../globals.css';
 import '../../styles/carbon-theme.scss';
 import HoneyHeader from '@/components/Navigation/HoneyHeader';
+import BlockchainStatusBanner from '@/components/Blockchain/BlockchainStatusBanner';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
 import { Content } from '@carbon/react';
@@ -66,6 +68,7 @@ export default async function LocaleLayout({
         <NextIntlClientProvider messages={messages}>
           <ServiceWorkerRegistrar />
           <HoneyHeader />
+          <BlockchainStatusBanner />
           <Content className="!pt-12 !px-0 !bg-transparent">
             <ErrorBoundary>
               <main id="main-content">

@@ -1,15 +1,35 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { labResults } from '@/lib/store';
+﻿import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth, AuthError, handleAuthError } from '@/lib/rbac';
+import { connectDB } from '@/lib/mongodb';
+import { LabResult } from '@/lib/models/LabResult';
 
-/** GET /api/lab/:batchId — fetch lab result for a specific batch */
 export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ batchId: string }> },
+  req: NextRequest,
+  { params }: { params: Promise<{ batchId: string }> }
 ) {
-  const { batchId } = await params;
-  const result = labResults.get(batchId);
-  if (!result) {
-    return NextResponse.json({ error: 'Lab result not found for this batch' }, { status: 404 });
+  try {
+    await requireAuth(req, ['lab', 'officer', 'enterprise', 'admin', 'consumer']);
+    const { batchId } = await params;
+
+    if (!batchId?.trim()) {
+      return NextResponse.json({ error: 'batchId is required' }, { status: 400 });
+    }
+
+    await connectDB();
+    const result = await LabResult.findOne({ batchId }).lean();
+
+    if (!result) {
+      return NextResponse.json(
+        { error: `No lab result found for batch: ${batchId}` },
+        { status: 404 }
+      );
+    }
+
+    const { _id, __v, ...clean } = result as Record<string, unknown>;
+    return NextResponse.json(clean);
+  } catch (err: unknown) {
+    if (err instanceof AuthError) return handleAuthError(err);
+    console.error('[LAB/:batchId] Error:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-  return NextResponse.json({ data: result });
 }

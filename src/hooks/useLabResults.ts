@@ -18,18 +18,20 @@ export function useLabResults(): UseLabResultsResult {
   const [error, setError]     = useState<string | null>(null);
   const [tick, setTick]       = useState(0);
 
-  const refresh = useCallback(() => setTick((n) => n + 1), []);
+  const refresh = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    setTick((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
 
     labApi
       .list()
-      .then(({ data }) => {
+      .then((res) => {
         if (!cancelled) {
-          setResults(data);
+          setResults(Array.isArray(res) ? res : []);
           setLoading(false);
         }
       })

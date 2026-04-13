@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 import {
   Tile,
   Button,
@@ -68,10 +69,12 @@ function validateLabForm(v: LabFormValues): Record<string, string> {
   if (!v.reducingSugars || isNaN(n(v.reducingSugars)) || n(v.reducingSugars) < 60) e.reducingSugars = 'Required. Codex minimum ≥ 60 g/100g';
   if (!v.conductivity || isNaN(n(v.conductivity))) e.conductivity = 'Required.';
   if (!v.fssaiLicense || v.fssaiLicense.length < 14) e.fssaiLicense = 'FSSAI license must be 14 digits';
+  if (!v.nablCert || !v.nablCert.trim()) e.nablCert = 'NABL certificate is required';
   return e;
 }
 
 export default function LabDashboard() {
+  const currentUser = useCurrentUser();
   const tOnboarding = useTranslations('Onboarding.lab');
   const tDashboard = useTranslations('Dashboard.lab');
   const { isTourOpen, isKYCOpen, completeKYC, completeTour, closeTour } = useOnboarding({ role: 'lab', hasKYC: true });
@@ -87,6 +90,7 @@ export default function LabDashboard() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [serverViolations, setServerViolations] = useState<string[]>([]);
+  const formRootRef = React.useRef<HTMLDivElement | null>(null);
 
   const tourSteps = [
     { label: tOnboarding('step1_title'), title: tOnboarding('step1_title'), description: tOnboarding('step1_desc') },
@@ -122,6 +126,7 @@ export default function LabDashboard() {
   const handlePublish = async () => {
     const errors = validateLabForm(form);
     if (!selectedBatchId) errors.batchId = 'Select a batch to analyse';
+    if (!currentUser.userId) errors.batchId = 'Session not ready. Please wait a moment and retry.';
     setFormErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
@@ -133,7 +138,7 @@ export default function LabDashboard() {
       await labApi.publish({
         batchId:        selectedBatchId,
         sampleId:       `LAB-${Date.now()}`,
-        labId:          'L-001',
+        labId:          currentUser.userId,
         fssaiLicense:   form.fssaiLicense,
         nablCert:       form.nablCert,
         moisture:       parseFloat(form.moisture),
@@ -169,8 +174,18 @@ export default function LabDashboard() {
     }
   };
 
+  const handleNewSample = () => {
+    const firstPending = pendingBatches.find((b) => !alreadyPublished(b.batchId));
+    setSelectedBatchId(firstPending?.batchId ?? '');
+    setForm(EMPTY_FORM);
+    setFormErrors({});
+    setPublishError(null);
+    setServerViolations([]);
+    formRootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   const headerActions = (
-    <Button kind="primary" renderIcon={Add}>{tDashboard('new_sample')}</Button>
+    <Button kind="primary" renderIcon={Add} onClick={handleNewSample}>{tDashboard('new_sample')}</Button>
   );
 
   const pageHeader = (
@@ -231,7 +246,7 @@ export default function LabDashboard() {
       {/* Lab Workflow */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-spacing-lg">
         <div className="flex flex-col gap-spacing-lg">
-          <Tile className="glass-panel p-spacing-xl rounded-2xl shadow-xl elevation-premium">
+          <Tile className="glass-panel p-spacing-xl rounded-2xl shadow-xl elevation-premium" ref={formRootRef}>
             <h3 className="text-h3 flex items-center gap-4 mb-spacing-lg">
               <div className="p-2 bg-primary/10 rounded-lg text-primary"><DataAnalytics size={24} /></div>
               {tDashboard('analysis_hub')}
@@ -248,8 +263,8 @@ export default function LabDashboard() {
                 invalidText={formErrors.batchId}
               >
                 <SelectItem value="" text="Select a batch…" />
-                {pendingBatches.filter(b => !alreadyPublished(b.id)).map(b => (
-                  <SelectItem key={b.id} value={b.id} text={`${b.id} — ${b.floraType} (${b.farmerName})`} />
+                {pendingBatches.filter(b => !alreadyPublished(b.batchId)).map(b => (
+                  <SelectItem key={b.id} value={b.batchId} text={`${b.batchId} — ${b.floraType} (${b.farmerName})`} />
                 ))}
               </Select>
             </div>
@@ -262,7 +277,8 @@ export default function LabDashboard() {
                   value={form.fssaiLicense} onChange={setField('fssaiLicense')}
                   invalid={!!formErrors.fssaiLicense} invalidText={formErrors.fssaiLicense} />
                 <TextInput id="nabl-cert" labelText={tDashboard('nabl_certificate')} placeholder={tDashboard('nabl_cert_placeholder')}
-                  value={form.nablCert} onChange={setField('nablCert')} />
+                  value={form.nablCert} onChange={setField('nablCert')}
+                  invalid={!!formErrors.nablCert} invalidText={formErrors.nablCert} />
               </div>
             </div>
 
@@ -348,7 +364,13 @@ export default function LabDashboard() {
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {tableRows.length === 0 && <EmptyState title="No samples in queue" description="All batches have been certified or no batches exist yet." />}
+                          {tableRows.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={tableHeaders.length}>
+                                <EmptyState title="No samples in queue" description="All batches have been certified or no batches exist yet." />
+                              </TableCell>
+                            </TableRow>
+                          )}
                           {tableRows.map((row) => (
                             <TableRow key={row.id} className="hover:!bg-slate-50 transition-colors border-none group">
                               {row.cells.map((cell) => (
@@ -380,8 +402,8 @@ export default function LabDashboard() {
         </div>
 
         <div className="flex flex-col gap-spacing-lg">
-          <PriorStepQR stepName="Warehouse Manager" batchId="WH-DEL-882" details="Custody verified. Temp: 22°C | Humidity: 55%" />
-          <BlockchainMapStamp locationName="NABL Regional Lab #04" latitude="24.5765° N" longitude="80.2210° E" utcTime="16:10:45" />
+          <PriorStepQR stepName="Warehouse Manager" batchId={selectedBatchId || '--'} details="Custody transfer verified" />
+          <BlockchainMapStamp locationName="NABL Regional Lab #04" latitude="24.5765° N" longitude="80.2210° E" utcTime={new Date().toISOString().substring(11,19)} />
           <Tile className="glass-panel bg-slate-950 text-white p-spacing-xl rounded-3xl shadow-2xl relative overflow-hidden group elevation-premium border-none">
             <div className="absolute right-[-40px] top-[-40px] opacity-10 group-hover:rotate-12 transition-transform duration-[2000ms] text-primary">
               <Certificate size={240} />
@@ -393,18 +415,18 @@ export default function LabDashboard() {
               <div className="flex justify-between items-start mb-spacing-xl">
                 <div>
                   <h4 className="text-h2 !text-white !tracking-normal">{tDashboard('certOfPurity')}</h4>
-                  <p className="text-[10px] text-primary font-mono mt-2 tracking-[0.1em]">{tDashboard('hash')}: 0x882...F92A</p>
+                  <p className="text-[10px] text-primary font-mono mt-2 tracking-[0.1em]">{tDashboard('hash')}: {selectedBatchId ? `0x${selectedBatchId.replace(/[^a-zA-Z0-9]/g,'').slice(0,4).toLowerCase()}...F92A` : '--'}</p>
                 </div>
                 <Tag type="green" className="!bg-success !text-white !rounded-md font-bold border-none px-4 py-2 ring-4 ring-success/20">{tDashboard('nablCompliant')}</Tag>
               </div>
               <div className="grid grid-cols-2 gap-spacing-md mb-spacing-lg">
                 <div className="border-l-2 border-primary/40 pl-spacing-md">
                   <p className="text-primary/60 uppercase tracking-widest text-[11px] mb-1">{tDashboard('moisture')}</p>
-                  <p className="font-bold text-2xl text-white tracking-tighter">{form.moisture || '17.8'}%</p>
+                  <p className="font-bold text-2xl text-white tracking-tighter">{form.moisture || '--'}%</p>
                 </div>
                 <div className="border-l-2 border-primary/40 pl-spacing-md">
                   <p className="text-primary/60 uppercase tracking-widest text-[11px] mb-1">{tDashboard('hmf')}</p>
-                  <p className="font-bold text-2xl text-white tracking-tighter">{form.hmf || '22'} mg/kg</p>
+                  <p className="font-bold text-2xl text-white tracking-tighter">{form.hmf || '--'} mg/kg</p>
                 </div>
                 <div className="border-l-2 border-primary/40 pl-spacing-md">
                   <p className="text-primary/60 uppercase tracking-widest text-[11px] mb-1">{tDashboard('test_diastase')}</p>
@@ -429,3 +451,4 @@ export default function LabDashboard() {
     </UnifiedDashboardLayout>
   );
 }
+
