@@ -12,7 +12,7 @@ import {
 } from '@carbon/icons-react';
 import GuidedTour from '@/components/Onboarding/GuidedTour';
 import PriorStepQR from '@/components/Traceability/PriorStepQR';
-import QRScanner from '@/components/Traceability/QRScanner';
+import QRCodeGenerator from '@/components/Traceability/QRCodeGenerator';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
 import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
 import BlockchainCertificate from '@/components/Traceability/BlockchainCertificate';
@@ -36,8 +36,6 @@ export default function ConsumerPortal() {
   const [batchData, setBatchData]             = useState<Batch | null>(null);
   const [labData, setLabData]                 = useState<LabResult | null>(null);
   const [traceTimeline, setTraceTimeline]     = useState<Array<Record<string, unknown>>>([]);
-  const [showScanner, setShowScanner]         = useState(false);
-
   const { isTourOpen, completeTour, closeTour } = useOnboarding({ role: 'consumer' });
 
   const tourSteps = [
@@ -176,6 +174,16 @@ export default function ConsumerPortal() {
               <h2 className="text-h2">{tDashboard('search_title')}</h2>
             </div>
 
+            {/* Tip: scanning the jar QR opens the page directly */}
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-sm text-amber-900">
+              <span className="text-lg leading-none mt-0.5">📱</span>
+              <span>
+                <strong>Tip:</strong> Scan the QR code on the product jar with your
+                phone camera — you will be taken directly to the journey page.
+                Or enter the batch ID below to search manually.
+              </span>
+            </div>
+
             <div className="flex gap-spacing-md items-end">
               <div className="flex-1">
                 <TextInput
@@ -188,7 +196,6 @@ export default function ConsumerPortal() {
                 />
               </div>
 
-              {/* Manual search button */}
               <Button
                 renderIcon={Search}
                 onClick={() => handleSearch()}
@@ -196,33 +203,16 @@ export default function ConsumerPortal() {
               >
                 {isSearching ? tc('loading') : tDashboard('search_btn')}
               </Button>
-
-              {/* QR scan toggle button */}
-              <Button
-                kind="tertiary"
-                renderIcon={QrCode}
-                iconDescription="Scan QR Code"
-                hasIconOnly
-                onClick={() => setShowScanner(v => !v)}
-                tooltipPosition="bottom"
-                className={showScanner ? 'ring-2 ring-primary' : ''}
-              />
             </div>
 
-            {/* Inline QR Scanner */}
-            {showScanner && (
-              <div className="mt-2 p-4 rounded-xl border border-border-subtle bg-background">
-                <p className="text-sm text-muted mb-3 text-center">
-                  Point camera at a HoneyTrace QR code
+            {/* QR code — shown as soon as a valid-looking batch ID is typed */}
+            {searchId.trim() && (
+              <div className="border-t border-border-subtle pt-4">
+                <p className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <QrCode size={16} className="text-primary" />
+                  QR Code for <span className="font-mono">{searchId.trim()}</span>
                 </p>
-                <QRScanner
-                  onResult={(id) => {
-                    setSearchId(id);
-                    setShowScanner(false);
-                    handleSearch(id);   // pass directly — no state race
-                  }}
-                  onError={(err) => setSearchError(`Scanner error: ${err}`)}
-                />
+                <QRCodeGenerator batchId={searchId.trim()} compact />
               </div>
             )}
 

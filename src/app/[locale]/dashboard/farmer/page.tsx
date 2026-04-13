@@ -21,6 +21,7 @@ import {
   DataTableSkeleton,
 } from '@carbon/react';
 import { Add, Sun, Chemistry, Growth, Location } from '@carbon/icons-react';
+import QRCodeGenerator from '@/components/Traceability/QRCodeGenerator';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useBatches } from '@/hooks/useBatches';
@@ -54,6 +55,8 @@ export default function FarmerDashboard({
   const [moistureValue, setMoistureValue] = useState(18);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [grade, setGrade] = useState<'A' | 'B'>('A');
+  // ── QR auto-show after batch registration ─────────────────────────────────
+  const [createdBatchId, setCreatedBatchId] = useState<string | null>(null);
   const [weight, setWeight] = useState(100);
 
   // ── GPS ───────────────────────────────────────────────────────────────────
@@ -151,7 +154,7 @@ export default function FarmerDashboard({
     setSubmitError(null);
 
     try {
-      await batchesApi.create({
+      const res = await batchesApi.create({
         farmerId:   currentUser.userId,
         farmerName: currentUser.name,
         floraType,
@@ -168,6 +171,9 @@ export default function FarmerDashboard({
       setMoistureValue(18);
       setWeight(100);
       setFormErrors({});
+      // Auto-show QR modal for the newly registered batch
+      const newId = res?.data?.batchId ?? res?.data?.id;
+      if (newId) setCreatedBatchId(String(newId));
     } catch (err) {
       setSubmitError(
         err instanceof ApiError ? err.message : 'Failed to record harvest. Please try again.',
@@ -293,6 +299,23 @@ export default function FarmerDashboard({
             />
           </div>
         </Stack>
+      </Modal>
+
+      {/* ── QR Code Modal (auto-opens after batch registration) ── */}
+      <Modal
+        open={!!createdBatchId}
+        modalHeading="Batch Registered — Product QR Code"
+        passiveModal
+        onRequestClose={() => setCreatedBatchId(null)}
+      >
+        <div className="flex flex-col items-center gap-4 py-4 text-center">
+          <p className="text-sm text-gray-600 max-w-xs">
+            Your batch has been recorded on the blockchain.
+            Print or download this QR code and attach it to the product jar —
+            consumers can scan it with any phone camera to see the full journey.
+          </p>
+          {createdBatchId && <QRCodeGenerator batchId={createdBatchId} />}
+        </div>
       </Modal>
 
       {/* Stats + Map Stamp */}
