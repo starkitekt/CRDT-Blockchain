@@ -66,7 +66,6 @@ export async function PATCH(
   }
 
   await connectDB();
-
   const user = await User.findById(id);
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
@@ -101,6 +100,5 @@ export async function PATCH(
 
   const { passwordHash: _, __v, ...clean } =
     user.toObject() as Record<string, unknown>;
-
   return NextResponse.json(clean);
 }

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" fill="none">
+  <g transform="translate(10,10)">
+    <!-- Gear/cog outer ring -->
+    <circle cx="50" cy="50" r="42" stroke="#1a237e" stroke-width="3" fill="none"/>
+    <circle cx="50" cy="50" r="36" stroke="#1a237e" stroke-width="1.5" fill="none"/>
+    <!-- Gear teeth (12 teeth) -->
+    <g stroke="#1a237e" stroke-width="2.5" fill="none">
+      <line x1="50" y1="2" x2="50" y2="10"/>
+      <line x1="50" y1="90" x2="50" y2="98"/>
+      <line x1="2" y1="50" x2="10" y2="50"/>
+      <line x1="90" y1="50" x2="98" y2="50"/>
+      <line x1="16" y1="16" x2="22" y2="22"/>
+      <line x1="78" y1="78" x2="84" y2="84"/>
+      <line x1="84" y1="16" x2="78" y2="22"/>
+      <line x1="22" y1="78" x2="16" y2="84"/>
+      <line x1="7" y1="32" x2="14" y2="35"/>
+      <line x1="86" y1="65" x2="93" y2="68"/>
+      <line x1="32" y1="7" x2="35" y2="14"/>
+      <line x1="65" y1="86" x2="68" y2="93"/>
+    </g>
+    <!-- Inner triangle -->
+    <polygon points="50,18 80,72 20,72" stroke="#1a237e" stroke-width="2" fill="none"/>
+    <!-- Ashoka Chakra simplified -->
+    <circle cx="50" cy="50" r="12" stroke="#1a237e" stroke-width="1.5" fill="none"/>
+    <circle cx="50" cy="50" r="3" fill="#1a237e"/>
+    <!-- Spokes -->
+    <g stroke="#1a237e" stroke-width="0.8">
+      <line x1="50" y1="38" x2="50" y2="62"/>
+      <line x1="38" y1="50" x2="62" y2="50"/>
+      <line x1="41.5" y1="41.5" x2="58.5" y2="58.5"/>
+      <line x1="58.5" y1="41.5" x2="41.5" y2="58.5"/>
+    </g>
+  </g>
+  <!-- Text -->
+  <text x="120" y="38" font-family="serif" font-size="14" font-weight="700" fill="#1a237e" letter-spacing="0.5">INDIAN INSTITUTE OF TECHNOLOGY</text>
+  <text x="120" y="60" font-family="serif" font-size="22" font-weight="700" fill="#1a237e" letter-spacing="1">IIT DELHI</text>
+  <text x="120" y="78" font-family="serif" font-size="11" fill="#1a237e" letter-spacing="0.3">भारतीय प्रौद्योगिकी संस्थान दिल्ली</text>
+  <text x="120" y="96" font-family="sans-serif" font-size="8.5" fill="#64748b" letter-spacing="1.5">EST. 1961 • NEW DELHI</text>
+</svg>

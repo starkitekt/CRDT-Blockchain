@@ -3,7 +3,7 @@
     "HoneyTraceRegistry": "0x5FbDB2315678afecb367f032d93F642f64180aa3"
   },
   "baseSepolia": {
-    "HoneyTraceRegistry": ""
+    "HoneyTraceRegistry": "0x2D85452bed2DE0613E09a8CC2d9C0e4beC26D8b6"
   },
   "hardhat": {
     "HoneyTraceRegistry": "0x5FbDB2315678afecb367f032d93F642f64180aa3"

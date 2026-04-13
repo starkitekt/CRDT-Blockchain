@@ -10,13 +10,32 @@ const REGISTRY_ABI = [
 ];
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_HONEYTRACE_CONTRACT ?? '';
-const POLYGON_RPC      = process.env.POLYGON_RPC_URL ?? 'https://polygon-rpc.com';
-const HARDHAT_RPC      = 'http://127.0.0.1:8545';
+const CHAIN_RPC = process.env.BLOCKCHAIN_RPC_URL
+  || process.env.BASE_SEPOLIA_RPC_URL
+  || process.env.LOCAL_RPC_URL
+  || 'http://127.0.0.1:8545';
 
 function getProvider() {
-  return process.env.NODE_ENV === 'production'
-    ? new ethers.JsonRpcProvider(POLYGON_RPC)
-    : new ethers.JsonRpcProvider(HARDHAT_RPC);
+  const rpc = CHAIN_RPC.toLowerCase();
+  const isBaseSepolia = rpc.includes('base') && rpc.includes('sepolia');
+  const isLocalhost = rpc.includes('127.0.0.1') || rpc.includes('localhost');
+  if (isBaseSepolia) {
+    const net = new ethers.Network('base-sepolia', 84532);
+    return new ethers.JsonRpcProvider(CHAIN_RPC, net, { staticNetwork: net });
+  }
+  if (isLocalhost) {
+    const net = new ethers.Network('localhost', 31337);
+    return new ethers.JsonRpcProvider(CHAIN_RPC, net, { staticNetwork: net });
+  }
+  return new ethers.JsonRpcProvider(CHAIN_RPC);
+}
+
+function resolveNetworkLabel(): string {
+  const rpc = CHAIN_RPC.toLowerCase();
+  if (rpc.includes('base') && rpc.includes('sepolia')) return 'baseSepolia';
+  if (rpc.includes('127.0.0.1') || rpc.includes('localhost')) return 'hardhat-local';
+  if (rpc.includes('polygon')) return 'polygon';
+  return 'unknown';
 }
 
 function buildCanonicalPayload(b: Record<string, unknown>) {
@@ -149,7 +168,7 @@ export async function GET(
     bizStep:      null,
     location:     null,
     recalls:      [],
-    network: process.env.NODE_ENV === 'production' ? 'polygon' : 'hardhat-local',
+    network: resolveNetworkLabel(),
   };
 
   if (CONTRACT_ADDRESS) {
@@ -180,7 +199,7 @@ export async function GET(
           recalls: recalled
             ? [{ tier: 1, reason: 'On-chain recall flag set', timestamp: Date.now(), officer: recorder }]
             : [],
-          network: process.env.NODE_ENV === 'production' ? 'polygon' : 'hardhat-local',
+          network: resolveNetworkLabel(),
         };
       } catch (callErr: unknown) {
         const msg = callErr instanceof Error ? callErr.message : String(callErr);

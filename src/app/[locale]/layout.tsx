@@ -6,14 +6,14 @@ import {IBM_Plex_Sans, Noto_Sans_Devanagari, DM_Sans} from 'next/font/google';
 import '../globals.css';
 import '../../styles/carbon-theme.scss';
 import HoneyHeader from '@/components/Navigation/HoneyHeader';
-import BlockchainStatusBanner from '@/components/Blockchain/BlockchainStatusBanner';
+import GovFooter from '@/components/Navigation/GovFooter';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
 import { Content } from '@carbon/react';
 
 export const metadata: Metadata = {
-  title: 'HoneyTRACE — Blockchain Traceability',
-  description: 'GS1 EPCIS 2.0 compliant honey supply chain traceability platform.',
+  title: 'HoneyTRACE — Blockchain Traceability | Ministry of Tribal Affairs × IIT Delhi',
+  description: 'GS1 EPCIS 2.0 compliant honey supply chain traceability platform. A Government of India initiative by Ministry of Tribal Affairs in collaboration with IIT Delhi.',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#f5a623',
+  themeColor: '#0a0a0a',
   width: 'device-width',
   initialScale: 1,
 };
@@ -68,14 +68,14 @@ export default async function LocaleLayout({
         <NextIntlClientProvider messages={messages}>
           <ServiceWorkerRegistrar />
           <HoneyHeader />
-          <BlockchainStatusBanner />
-          <Content className="!pt-12 !px-0 !bg-transparent">
+          <Content className="!pt-0 !px-0 !bg-transparent">
             <ErrorBoundary>
               <main id="main-content">
                 {children}
               </main>
             </ErrorBoundary>
           </Content>
+          <GovFooter />
         </NextIntlClientProvider>
       </body>
     </html>

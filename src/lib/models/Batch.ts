@@ -71,6 +71,7 @@ const BatchSchema = new Schema(
 
 BatchSchema.set('toJSON', {
   transform: (_doc, ret: Record<string, unknown>) => {
+    if (ret._id) ret.id = String(ret._id);
     delete ret._id;
     delete ret._payloadHash;
     return ret;

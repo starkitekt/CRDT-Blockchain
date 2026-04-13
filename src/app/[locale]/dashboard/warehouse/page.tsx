@@ -28,6 +28,7 @@ import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayo
 import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
 import { useBatches } from '@/hooks/useBatches';
 import { batchesApi, ApiError } from '@/lib/api';
+import CopyableValue from '@/components/CopyableValue';
 
 export default function WarehouseDashboard() {
   const t = useTranslations('Onboarding.warehouse');
@@ -68,6 +69,7 @@ export default function WarehouseDashboard() {
     batch: `${b.floraType} — ${b.batchId || b.id}`,
     status: b.status,
     arrival: b.createdAt ? b.createdAt.slice(0, 10) : '--',
+    txHash: b.onChainTxHash || '',
   }));
 
   // Derive stock level KPI: sum of weightKg for in_warehouse batches
@@ -101,6 +103,7 @@ export default function WarehouseDashboard() {
     { key: 'batch', header: tDashboard('batch_name') },
     { key: 'status', header: tDashboard('status') },
     { key: 'arrival', header: tDashboard('last_update') },
+    { key: 'txHash', header: 'On-Chain TX' },
   ];
 
   const handleRecordIncoming = async () => {
@@ -440,6 +443,16 @@ export default function WarehouseDashboard() {
                         </Tag>
                       </TableCell>
                       <TableCell className="!p-4 !border-none text-slate-500 font-medium">{row.arrival}</TableCell>
+                      <TableCell className="!p-4 !border-none">
+                        {row.txHash ? (
+                          <div className="flex items-center gap-1">
+                            <span className="font-mono text-[11px] text-teal-700 break-all max-w-[180px]">{row.txHash}</span>
+                            <CopyableValue value={row.txHash} label="Copy" className="min-h-0 h-6 px-1" />
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">Pending</span>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

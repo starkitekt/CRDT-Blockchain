@@ -71,7 +71,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // "standalone" is for Docker/self-hosted only — Vercel manages its own output
+  // and will fail if this is set during Vercel deployments.
+  ...(process.env.VERCEL ? {} : { output: "standalone" }),
 
   // Prevents Next.js from bundling mongoose (causes build failures)
   serverExternalPackages: ["mongoose"],
