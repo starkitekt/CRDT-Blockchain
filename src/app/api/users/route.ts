@@ -25,7 +25,9 @@ export async function GET(req: NextRequest) {
       .sort({ createdAt: -1 })
       .lean();
 
-    return NextResponse.json(users);
+    // Ensure _id is serialised as a plain string (BSON ObjectId → string)
+    const serialised = users.map(u => ({ ...u, _id: String(u._id) }));
+    return NextResponse.json(serialised);
 
   } catch (err) {
     if (err instanceof AuthError) return handleAuthError(err);
