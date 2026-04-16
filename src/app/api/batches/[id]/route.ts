@@ -54,6 +54,9 @@ export async function PATCH(
 
   } catch (err) {
     if (err instanceof AuthError) return handleAuthError(err);
+    if (err instanceof Error && err.message.startsWith('INVALID_STATUS_TRANSITION:')) {
+      return NextResponse.json({ error: err.message }, { status: 409 });
+    }
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 }

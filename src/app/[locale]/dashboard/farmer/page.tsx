@@ -2,11 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
 import {
   Button,
   Modal,
   TextInput,
   NumberInput,
+  Select,
+  SelectItem,
   Stack,
   InlineNotification,
   DataTableSkeleton,
@@ -31,7 +34,7 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useBatches } from '@/hooks/useBatches';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
-import { batchesApi, ApiError } from '@/lib/api';
+import { batchesApi, warehousesApi, ApiError, type WarehouseOption } from '@/lib/api';
 import GuidedTour from '@/components/Onboarding/GuidedTour';
 import SimplifiedFarmerOnboarding from '@/components/Onboarding/SimplifiedFarmerOnboarding';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
@@ -39,15 +42,32 @@ import CopyableValue from '@/components/CopyableValue';
 
 /* ── Status helpers ─────────────────────────────────────────────────────── */
 const STATUS_META: Record<string, { label: string; type: 'green' | 'blue' | 'purple' | 'red' | 'gray' }> = {
+  created:      { label: 'Created',       type: 'gray'   },
+  pending:      { label: 'Created',       type: 'gray'   },
+  stored:       { label: 'Stored',        type: 'blue'   },
   certified:    { label: 'Certified',     type: 'green'  },
+  approved:     { label: 'Approved',      type: 'green'  },
+  delivered:    { label: 'Delivered',     type: 'green'  },
   recalled:     { label: 'Recalled',      type: 'red'    },
-  in_testing:   { label: 'In Testing',    type: 'purple' },
-  in_warehouse: { label: 'In Warehouse',  type: 'blue'   },
+  in_testing:   { label: 'Tested',        type: 'purple' },
+  dispatched:   { label: 'Dispatched',    type: 'blue'   },
+  in_warehouse: { label: 'Stored',        type: 'blue'   },
 };
 const getStatus = (s: string) => STATUS_META[s] ?? { label: s.replace(/_/g, ' '), type: 'gray' as const };
 
+function hasInvalidImageSelection(files: File[]): boolean {
+  if (files.length > 5) return true;
+  const validTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+  for (const file of files) {
+    if (!validTypes.has(file.type)) return true;
+    if (file.size > 5 * 1024 * 1024) return true;
+  }
+  return false;
+}
+
 /* ════════════════════════════════════════════════════════════════════════ */
 export default function FarmerDashboard({ params }: { params: Promise<{ locale: string }> }) {
+  const router = useRouter();
   const currentUser = useCurrentUser();
   const { profile, loading: profileLoading } = useUserProfile();
   const { locale }  = React.use(params);
@@ -71,6 +91,14 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
   const [grade, setGrade]                         = useState<'A' | 'B'>('A');
   const [createdBatchId, setCreatedBatchId]       = useState<string | null>(null);
   const [weight, setWeight]                       = useState(100);
+  const [selectedImages, setSelectedImages]       = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews]         = useState<string[]>([]);
+  const [imageGeo, setImageGeo]                   = useState<{ latitude: number | null; longitude: number | null }>({ latitude: null, longitude: null });
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
+  const [warehouses, setWarehouses]               = useState<WarehouseOption[]>([]);
+  const [warehousesLoading, setWarehousesLoading] = useState(false);
+  const [warehousesError, setWarehousesError]     = useState<string | null>(null);
+  const [navigatingBatchId, setNavigatingBatchId] = useState<string | null>(null);
 
   /* ── GPS ──────────────────────────────────────────────────────────── */
   const [gpsReady,   setGpsReady]   = useState(false);
@@ -139,6 +167,15 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
     if (weight > 5000)                                 errors.weight    = 'Weight cannot exceed 5,000 kg';
     if (moistureValue < 10 || moistureValue > 25)      errors.moisture  = 'Moisture must be between 10% and 25%';
     if (!gpsReady)                                     errors.gps       = 'GPS lock required before submission';
+    if (!selectedWarehouseId)                          errors.warehouse = 'Warehouse selection is required';
+    if (selectedImages.length > 5)                     errors.images    = 'You can upload at most 5 images';
+    if (selectedImages.length > 0) {
+      const validTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+      for (const file of selectedImages) {
+        if (!validTypes.has(file.type)) errors.images = 'Only jpeg, png, and webp images are allowed';
+        if (file.size > 5 * 1024 * 1024) errors.images = 'Each image must be 5MB or smaller';
+      }
+    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -148,15 +185,25 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
     if (!validateHarvestForm()) return;
     setIsSubmitting(true); setSubmitError(null);
     try {
-      const res = await batchesApi.create({
-        farmerId: currentUser.userId, farmerName: currentUser.name,
-        floraType, weightKg: weight, moisturePct: moistureValue,
-        latitude: gpsLat, longitude: gpsLng, grade,
-        harvestDate: new Date().toISOString().slice(0, 10),
-      });
+      const formData = new FormData();
+      formData.append('farmerId', currentUser.userId);
+      formData.append('farmerName', currentUser.name);
+      formData.append('floraType', floraType);
+      formData.append('weightKg', String(weight));
+      formData.append('moisturePct', String(moistureValue));
+      formData.append('latitude', gpsLat);
+      formData.append('longitude', gpsLng);
+      formData.append('grade', grade);
+      formData.append('harvestDate', new Date().toISOString().slice(0, 10));
+      formData.append('warehouseId', selectedWarehouseId);
+      formData.append('imageLatitude', imageGeo.latitude == null ? '' : String(imageGeo.latitude));
+      formData.append('imageLongitude', imageGeo.longitude == null ? '' : String(imageGeo.longitude));
+      selectedImages.forEach((file) => formData.append('images', file));
+
+      const res = await batchesApi.create(formData);
       refresh();
       setIsRecordModalOpen(false);
-      setFloraType(''); setMoistureValue(18); setWeight(100); setFormErrors({});
+      setFloraType(''); setMoistureValue(18); setWeight(100); setFormErrors({}); setSelectedImages([]); setImagePreviews([]); setSelectedWarehouseId(''); setImageGeo({ latitude: null, longitude: null });
       const newId = res?.data?.batchId ?? res?.data?.id;
       if (newId) setCreatedBatchId(String(newId));
     } catch (err) {
@@ -164,8 +211,59 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
     } finally { setIsSubmitting(false); }
   };
 
-  const openModal  = () => { setSubmitError(null); setFormErrors({}); setIsRecordModalOpen(true); };
-  const closeModal = () => { setIsRecordModalOpen(false); setSubmitError(null); setFormErrors({}); };
+  const loadWarehouses = async () => {
+    setWarehousesLoading(true);
+    setWarehousesError(null);
+    try {
+      const data = await warehousesApi.list();
+      setWarehouses(data);
+    } catch (err) {
+      setWarehouses([]);
+      setWarehousesError(err instanceof ApiError ? err.message : 'Failed to load warehouses');
+    } finally {
+      setWarehousesLoading(false);
+    }
+  };
+
+  const openModal  = () => { setSubmitError(null); setFormErrors({}); setIsRecordModalOpen(true); void loadWarehouses(); };
+  const closeModal = () => { setIsRecordModalOpen(false); setSubmitError(null); setFormErrors({}); setSelectedImages([]); setImagePreviews([]); setSelectedWarehouseId(''); setImageGeo({ latitude: null, longitude: null }); };
+
+  const handleViewJourney = (batchId?: string) => {
+    if (!batchId) return;
+    setNavigatingBatchId(batchId);
+    router.push(`/${locale}/trace/${batchId}`);
+  };
+
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    setSelectedImages(files);
+    setFormErrors((prev) => ({ ...prev, images: '' }));
+    if (files.length > 0 && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setImageGeo({
+            latitude: Number(position.coords.latitude.toFixed(6)),
+            longitude: Number(position.coords.longitude.toFixed(6)),
+          });
+        },
+        () => {
+          setImageGeo({ latitude: null, longitude: null });
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+      );
+    } else {
+      setImageGeo({ latitude: null, longitude: null });
+    }
+
+    const previews = files.map((file) => URL.createObjectURL(file));
+    setImagePreviews(previews);
+  };
+
+  useEffect(() => {
+    return () => {
+      imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [imagePreviews]);
 
   /* ── Derived values ───────────────────────────────────────────────── */
   const totalWeight    = batches.reduce((s, b) => s + b.weightKg, 0);
@@ -251,7 +349,13 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
         secondaryButtonText={t('cancel')}
         onRequestClose={closeModal}
         onRequestSubmit={handleRecordSubmit}
-        primaryButtonDisabled={isSubmitting}
+        primaryButtonDisabled={
+          isSubmitting
+          || warehousesLoading
+          || warehouses.length === 0
+          || !selectedWarehouseId
+          || hasInvalidImageSelection(selectedImages)
+        }
         size="sm"
       >
         <Stack gap={6}>
@@ -291,6 +395,62 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
             invalid={!!formErrors.floraType}
             invalidText={formErrors.floraType}
           />
+
+          <Select
+            id="warehouse-select"
+            labelText="Select Warehouse"
+            value={selectedWarehouseId}
+            onChange={(e) => setSelectedWarehouseId(e.target.value)}
+            invalid={!!formErrors.warehouse}
+            invalidText={formErrors.warehouse}
+            disabled={warehousesLoading || warehouses.length === 0}
+          >
+            <SelectItem value="" text={warehousesLoading ? 'Loading warehouses...' : 'Select Warehouse'} />
+            {warehouses.map((w) => (
+              <SelectItem
+                key={w.id}
+                value={w.id}
+                text={w.location ? `${w.name} (${w.location})` : w.name}
+              />
+            ))}
+          </Select>
+
+          {warehousesError && (
+            <InlineNotification kind="error" title="Warehouse load failed" subtitle={warehousesError} lowContrast />
+          )}
+          {!warehousesLoading && warehouses.length === 0 && !warehousesError && (
+            <InlineNotification kind="warning" title="No warehouses available" subtitle="No warehouses available" lowContrast hideCloseButton />
+          )}
+
+          <div>
+            <label htmlFor="batch-images" className="cds--label">Batch Images (optional)</label>
+            <input
+              id="batch-images"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              onChange={handleImageChange}
+              className="mt-2 block w-full text-sm"
+            />
+            <p className="text-xs text-slate-500 mt-1">Allowed: jpeg/png/webp, max 5MB each</p>
+            <p className="text-xs text-slate-500 mt-1">
+              Image GPS tag: {imageGeo.latitude == null || imageGeo.longitude == null ? 'Not captured' : `${imageGeo.latitude}, ${imageGeo.longitude}`}
+            </p>
+            {formErrors.images && <p className="fd-field-error">{formErrors.images}</p>}
+
+            {imagePreviews.length > 0 && (
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {imagePreviews.map((preview, index) => (
+                  <img
+                    key={`${preview}-${index}`}
+                    src={preview}
+                    alt={`Selected upload ${index + 1}`}
+                    className="w-full h-20 object-cover rounded border border-slate-200"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
 
           <div className="fd-form-row">
             <NumberInput
@@ -525,11 +685,13 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
                   <th scope="col">{t('weight_kg')}</th>
                   <th scope="col">{t('status')}</th>
                   <th scope="col">On-Chain TX</th>
+                  <th scope="col">Journey</th>
                 </tr>
               </thead>
               <tbody>
                 {batches.map((batch) => {
                   const statusMeta = getStatus(batch.status);
+                  const rowBatchId = batch.batchId || batch.id || '';
                   return (
                     <tr key={batch.id}>
                       <td>
@@ -558,6 +720,16 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
                         ) : (
                           <span className="fd-tx-pending">Pending</span>
                         )}
+                      </td>
+                      <td>
+                        <Button
+                          size="sm"
+                          kind="secondary"
+                          disabled={!rowBatchId || navigatingBatchId === rowBatchId}
+                          onClick={() => handleViewJourney(rowBatchId)}
+                        >
+                          {navigatingBatchId === rowBatchId ? 'Loading...' : 'View Journey'}
+                        </Button>
                       </td>
                     </tr>
                   );

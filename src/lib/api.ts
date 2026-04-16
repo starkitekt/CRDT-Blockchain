@@ -33,12 +33,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ? path
       : `/${path}`;
 
+  const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData;
+  const headers = isFormData
+    ? { ...(init?.headers ?? {}) }
+    : {
+        'Content-Type': 'application/json',
+        ...(init?.headers ?? {}),
+      };
+
   const res = await fetch(normalizedPath, {
     ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
+    headers,
   });
 
   let body: Record<string, unknown> = {};
@@ -63,11 +68,17 @@ export function apiGet<T>(path: string): Promise<T> {
 }
 
 export function apiPost<T>(path: string, body: unknown): Promise<T> {
-  return request<T>(path, { method: 'POST', body: JSON.stringify(body) });
+  const payload = (typeof FormData !== 'undefined' && body instanceof FormData)
+    ? body
+    : JSON.stringify(body);
+  return request<T>(path, { method: 'POST', body: payload });
 }
 
 export function apiPatch<T>(path: string, body: unknown): Promise<T> {
-  return request<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
+  const payload = (typeof FormData !== 'undefined' && body instanceof FormData)
+    ? body
+    : JSON.stringify(body);
+  return request<T>(path, { method: 'PATCH', body: payload });
 }
 
 export function apiDelete<T>(path: string): Promise<T> {
@@ -91,6 +102,30 @@ export interface CreateBatchPayload {
   longitude: string;
   grade: 'A' | 'B';
   harvestDate: string;
+  warehouseId?: string;
+  images?: Array<{ url: string; latitude: number | null; longitude: number | null }>;
+}
+
+export interface NotificationItem {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  message: string;
+  batchId: string | null;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface NotificationsResponse {
+  notifications: NotificationItem[];
+  unreadCount: number;
+}
+
+export interface WarehouseOption {
+  id: string;
+  name: string;
+  location: string | null;
 }
 
 export const batchesApi = {
@@ -102,7 +137,7 @@ export const batchesApi = {
     return apiGet<Batch[]>(`/api/batches${query ? `?${query}` : ''}`);
   },
   get:    (id: string)   => apiGet<Batch>(`/api/batches/${id}`),
-  create: (payload: CreateBatchPayload) =>
+  create: (payload: CreateBatchPayload | FormData) =>
     apiPost<{ data: Batch }>('/api/batches', payload),
   patch:  (id: string, payload: Partial<Batch>) =>
     apiPatch<Batch>(`/api/batches/${id}`, payload),
@@ -127,4 +162,16 @@ export const authApi = {
   register: (payload: { name: string; email: string; password: string; role: string }) =>
     apiPost<{ token: string; user: { id: string; name: string; email: string; role: string; kycCompleted: boolean } }>('/api/auth/register', payload),
   logout: () => apiDelete<{ success: boolean }>('/api/auth'),
+};
+
+export const notificationsApi = {
+  list: () => apiGet<NotificationsResponse>('/api/notifications'),
+  markRead: (notificationId: string) =>
+    apiPatch<{ id: string; isRead: boolean }>('/api/notifications/read', { notificationId }),
+  markAllRead: () =>
+    apiPatch<{ all: true; modifiedCount: number }>('/api/notifications/read', { all: true }),
+};
+
+export const warehousesApi = {
+  list: () => apiGet<WarehouseOption[]>('/api/warehouses'),
 };
