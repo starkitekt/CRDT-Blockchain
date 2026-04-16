@@ -117,29 +117,81 @@ export default function LandingPage() {
 
   return (
     <div className="lp" data-hydrated={isHydrated ? 'true' : 'false'}>
-      {/* ── Thin gov stripe ─────────────────────────────────────────── */}
+      {/* ── Skip Navigation (GIGW §4.1 / WCAG 2.1 SC 2.4.1) ─────────── */}
+      <a href="#lp-main" className="lp-skip-nav">Skip to Main Content</a>
+
+      {/* ── Tricolor stripe (GIGW mandatory) ────────────────────────── */}
       <div className="lp-gov-stripe" aria-hidden="true">
         <span /><span /><span />
       </div>
 
-      {/* ── Top bar ─────────────────────────────────────────────────── */}
-      <header className="lp-topbar">
-        <div className="lp-topbar-inner">
-          <div className="lp-topbar-brand">
-            <img src="/logos/ministry-tribal-affairs.svg" alt="Ministry of Tribal Affairs" className="lp-topbar-logo" />
-            <span className="lp-topbar-sep" />
-            <img src="/logos/iit-delhi.svg" alt="IIT Delhi" className="lp-topbar-logo lp-topbar-logo--iit" />
+      {/* ── NIC-compliant Government Header ─────────────────────────── */}
+      <header className="lp-gov-header" role="banner">
+        <div className="lp-gov-header-inner">
+          {/* Left: Emblem + Ministry branding */}
+          <div className="lp-gov-brand">
+            <img
+              src="/logos/ministry-tribal-affairs.svg"
+              alt="Government of India – Ministry of Tribal Affairs"
+              className="lp-gov-emblem"
+            />
+            <div className="lp-gov-brand-text">
+              <span className="lp-gov-title-hi" lang="hi">भारत सरकार | जनजातीय कार्य मंत्रालय</span>
+              <span className="lp-gov-title-en">Government of India &nbsp;|&nbsp; Ministry of Tribal Affairs</span>
+              <span className="lp-gov-subtitle">HoneyTRACE — Blockchain Traceability Portal</span>
+            </div>
+            <span className="lp-gov-sep" aria-hidden="true" />
+            <img src="/logos/iit-delhi.jpg" alt="IIT Delhi" className="lp-gov-iit" />
           </div>
-          <div className="lp-topbar-right">
-            <button onClick={switchLocale} className="lp-lang-btn">
+
+          {/* Right: Accessibility + Language (GIGW §4.3) */}
+          <div className="lp-gov-tools" role="toolbar" aria-label="Accessibility and language tools">
+            <div className="lp-font-sizer" role="group" aria-label="Adjust text size">
+              <button className="lp-tool-btn" aria-label="Decrease text size" title="Decrease font size"
+                onClick={() => { const s = parseFloat(getComputedStyle(document.documentElement).fontSize); document.documentElement.style.fontSize = Math.max(12, s - 2) + 'px'; }}>
+                A<sup aria-hidden="true">-</sup>
+              </button>
+              <button className="lp-tool-btn lp-tool-btn--default" aria-label="Default text size" title="Default font size"
+                onClick={() => { document.documentElement.style.fontSize = ''; }}>
+                A
+              </button>
+              <button className="lp-tool-btn" aria-label="Increase text size" title="Increase font size"
+                onClick={() => { const s = parseFloat(getComputedStyle(document.documentElement).fontSize); document.documentElement.style.fontSize = Math.min(24, s + 2) + 'px'; }}>
+                A<sup aria-hidden="true">+</sup>
+              </button>
+            </div>
+            <span className="lp-gov-divider" aria-hidden="true" />
+            <button
+              className="lp-tool-btn lp-tool-btn--contrast"
+              aria-label="Toggle high contrast mode"
+              title="High Contrast"
+              onClick={() => document.body.classList.toggle('high-contrast')}
+            >
+              HC
+            </button>
+            <span className="lp-gov-divider" aria-hidden="true" />
+            <button onClick={switchLocale} className="lp-tool-btn lp-tool-btn--lang"
+              aria-label={locale === 'en' ? 'Switch to Hindi' : 'Switch to English'}>
               {locale === 'en' ? 'हिन्दी' : 'English'}
             </button>
           </div>
         </div>
       </header>
 
+      {/* ── NIC navigation band ──────────────────────────────────────── */}
+      <nav className="lp-nav-band" aria-label="Main navigation">
+        <div className="lp-nav-inner">
+          <a href="#lp-main" className="lp-nav-link lp-nav-link--active">Home</a>
+          <a href="#supply-chain" className="lp-nav-link">Supply Chain</a>
+          <a href="#features" className="lp-nav-link">Features</a>
+          <a href="#auth" className="lp-nav-link">Portal Login</a>
+          <a href="#contact" className="lp-nav-link">Contact Us</a>
+        </div>
+      </nav>
+
       {/* ── Hero split ──────────────────────────────────────────────── */}
-      <section className="lp-hero">
+      <main id="lp-main" tabIndex={-1}>
+      <section className="lp-hero" aria-labelledby="lp-hero-title">
         <div className="lp-hero-bg" aria-hidden="true">
           <div className="lp-hero-gradient" />
           <div className="lp-hero-noise" />
@@ -153,7 +205,7 @@ export default function LandingPage() {
               <span>{t('hero_chip')}</span>
             </div>
 
-            <h1 className="lp-title">
+            <h1 id="lp-hero-title" className="lp-title">
               {t('hero_title_1')}
               <span className="lp-title-accent">{t('hero_title_accent')}</span>
               {t('hero_title_2')}
@@ -260,11 +312,11 @@ export default function LandingPage() {
       </section>
 
       {/* ── Supply Chain ────────────────────────────────────────────── */}
-      <section id="supply-chain" className="lp-section">
+      <section id="supply-chain" className="lp-section" aria-labelledby="supply-chain-title">
         <div className="lp-section-inner">
           <div className="lp-section-hd">
             <span className="lp-overline">{t('chain_overline')}</span>
-            <h2>{t('chain_title')}</h2>
+            <h2 id="supply-chain-title">{t('chain_title')}</h2>
             <p>{t('chain_desc')}</p>
           </div>
 
@@ -290,11 +342,11 @@ export default function LandingPage() {
       </section>
 
       {/* ── Features ────────────────────────────────────────────────── */}
-      <section className="lp-section lp-section--alt">
+      <section id="features" className="lp-section lp-section--alt" aria-labelledby="features-title">
         <div className="lp-section-inner">
           <div className="lp-section-hd">
             <span className="lp-overline">{t('features_overline')}</span>
-            <h2>{t('features_title')}</h2>
+            <h2 id="features-title">{t('features_title')}</h2>
           </div>
           <div className="lp-features">
             {[
@@ -318,17 +370,21 @@ export default function LandingPage() {
       </section>
 
       {/* ── CTA ─────────────────────────────────────────────────────── */}
-      <section className="lp-cta">
+      <section className="lp-cta" aria-labelledby="cta-title">
         <div className="lp-cta-inner">
-          <span className="lp-overline" style={{ color: 'rgba(255,255,255,0.5)' }}>{t('cta_overline')}</span>
-          <h2>{t('cta_title')}</h2>
+          <span className="lp-overline lp-overline--light">{t('cta_overline')}</span>
+          <h2 id="cta-title">{t('cta_title')}</h2>
           <p>{t('cta_desc')}</p>
           <a href="#auth" className="lp-cta-btn">
             {t('hero_cta')}
-            <ArrowRight size={18} />
+            <ArrowRight size={18} aria-hidden="true" />
           </a>
         </div>
       </section>
+
+      {/* ── Contact anchor ──────────────────────────────────────────── */}
+      <div id="contact" aria-hidden="true" />
+      </main>
     </div>
   );
 }

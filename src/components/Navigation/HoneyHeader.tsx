@@ -14,7 +14,6 @@ import {
   HeaderContainer,
 } from "@carbon/react";
 import {
-  UserAvatar,
   Notification,
   NotificationNew,
   Logout,
@@ -186,8 +185,6 @@ const ROLE_NOTIFICATIONS: Record<string, NotificationItem[]> = {
 const HoneyHeader = () => {
   const pathname = usePathname();
   const router = useRouter();
-  const t = useTranslations("Navigation");
-  const tr = useTranslations("Roles");
   const ti = useTranslations("Index");
   const tCommon = useTranslations("common");
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -250,12 +247,6 @@ const HoneyHeader = () => {
               {ti("title")}
             </HeaderName>
 
-            <HeaderNavigation aria-label="Current role">
-              <span className="flex items-center px-4 text-xs font-bold text-blue-400 uppercase tracking-widest border-l border-gray-700 ml-4 h-full">
-                {t("persona")}: {tr(`${currentRole.id}.title`)}
-              </span>
-            </HeaderNavigation>
-
             <HeaderGlobalBar>
               <HeaderGlobalAction
                 aria-label={tCommon("notifications")}
@@ -279,17 +270,6 @@ const HoneyHeader = () => {
               >
                 <Logout size={20} />
               </HeaderGlobalAction>
-
-              <div className="flex items-center px-4 border-l border-border-subtle gap-2">
-                <UserAvatar size={20} className="text-primary shrink-0" />
-                {/* Visible on md+; on mobile shows just the icon */}
-                <span className="text-[11px] font-bold uppercase tracking-widest text-text-secondary hidden md:block">
-                  {t("verifiedStakeholder")}
-                </span>
-                <span className="text-[11px] font-bold uppercase tracking-widest text-text-secondary md:hidden">
-                  {tr(`${currentRole.id}.title`).split(" ")[0]}
-                </span>
-              </div>
             </HeaderGlobalBar>
 
             <NotificationCenter
@@ -309,7 +289,7 @@ const HoneyHeader = () => {
                 <SideNavLink
                   href={`/${pathname.split("/")[1]}/dashboard/${currentRole.id}`}
                 >
-                  {tr(`${currentRole.id}.title`)} {t("dashboard")}
+                  Dashboard
                 </SideNavLink>
               </SideNavItems>
             </SideNav>
@@ -320,32 +300,30 @@ const HoneyHeader = () => {
 
       {/* Logout confirmation dialog */}
       {isLogoutConfirmOpen && (
-        <div className="fixed inset-0 z-[3000] flex items-center justify-center">
+        <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/30"
             onClick={() => setIsLogoutConfirmOpen(false)}
+            aria-hidden="true"
           />
-          <div className="relative bg-surface rounded-2xl shadow-2xl p-spacing-xl max-w-sm w-full mx-4 border border-border-subtle">
-            <div className="flex items-center gap-3 mb-spacing-md">
-              <div className="p-2 bg-error/10 rounded-lg text-error">
-                <Logout size={20} />
-              </div>
-              <h2 className="text-h3 !text-base">Sign out of HoneyTRACE?</h2>
+          <div className="logout-dialog">
+            <div className="logout-dialog-icon">
+              <Logout size={22} />
             </div>
-            <p className="text-sm text-text-secondary mb-spacing-lg leading-relaxed">
-              Any unsaved changes will be lost. You will need to re-authenticate
-              to continue.
+            <h2 className="logout-dialog-title">Sign out of HoneyTRACE?</h2>
+            <p className="logout-dialog-desc">
+              Any unsaved changes will be lost. You will need to sign in again to continue.
             </p>
-            <div className="flex gap-spacing-sm">
+            <div className="logout-dialog-actions">
               <button
                 onClick={() => setIsLogoutConfirmOpen(false)}
-                className="flex-1 h-11 rounded-xl border border-border-subtle text-sm font-bold text-text-secondary hover:bg-background transition-colors"
+                className="logout-btn logout-btn--cancel"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmLogout}
-                className="flex-1 h-11 rounded-xl bg-error text-white text-sm font-bold hover:bg-red-700 transition-colors"
+                className="logout-btn logout-btn--confirm"
               >
                 Sign Out
               </button>

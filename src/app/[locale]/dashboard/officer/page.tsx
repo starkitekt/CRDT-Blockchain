@@ -130,25 +130,17 @@ export default function OfficerDashboard() {
     }
   }, [batches, selectedAuditBatch]);
 
-  const headerActions = (
-    <div className="w-full md:w-80">
-      <Search size="md" labelText={tDashboard('audit_search')} placeholder={tDashboard('search_placeholder')} />
-    </div>
-  );
-
   const pageHeader = (
-    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-spacing-lg py-spacing-xl animate-fade-in">
-      <div>
-        <h1 className="text-h1 flex items-center gap-4">
-          <div className="p-3 bg-primary/10 rounded-2xl text-primary ring-1 ring-primary/20">
-            <Stamp size={32} />
-          </div>
-          {tDashboard('qc_header')}
-        </h1>
-        <p className="text-body mt-spacing-xs max-w-lg">{tDashboard('qc_description')}</p>
+    <div className="od-header">
+      <div className="od-header-left">
+        <p className="od-role-tag">Quality Control Officer · HoneyTRACE</p>
+        <h1 className="od-title">{tDashboard('qc_header')}</h1>
+        <p className="od-subtitle">{tDashboard('qc_description')}</p>
       </div>
-      <div className="shrink-0">
-        {headerActions}
+      <div className="od-header-actions">
+        <div style={{ width: 280 }}>
+          <Search size="md" labelText={tDashboard('audit_search')} placeholder={tDashboard('search_placeholder')} />
+        </div>
       </div>
     </div>
   );
@@ -169,32 +161,39 @@ export default function OfficerDashboard() {
       />
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-spacing-lg">
-        <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
-          <p className="text-caption mb-spacing-md tracking-widest uppercase !text-slate-400">{tDashboard('pending_approval')}</p>
-          <h2 className="text-h1 text-gradient">{batchesLoading ? '—' : pendingCount}</h2>
-          <div className="mt-4 flex items-center gap-2">
-            <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-            <span className="text-[10px] font-bold text-primary uppercase">{tDashboard('needs_review')}</span>
+      <div className="wd-kpi-grid">
+        <div className="wd-kpi-card">
+          <div className="wd-kpi-top">
+            <span className="wd-kpi-label">{tDashboard('pending_approval')}</span>
+            <div className="wd-kpi-icon wd-kpi-icon--blue"><Stamp size={18} /></div>
           </div>
-        </Tile>
-        <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
-          <p className="text-caption mb-spacing-md tracking-widest uppercase !text-slate-400">{tDashboard('approved_today')}</p>
-          <h2 className="text-h1 text-gradient">{batchesLoading ? '—' : certifiedToday}</h2>
-          <div className="mt-4 text-[10px] font-bold text-success uppercase">{tDashboard('signed_success')}</div>
-        </Tile>
-        <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
-          <p className="text-caption mb-spacing-md tracking-widest uppercase !text-slate-400">{tDashboard('field_audits_req')}</p>
-          <h2 className="text-h1 text-gradient">{fieldAuditCount}</h2>
-          <div className="mt-4 text-[10px] font-bold text-warning uppercase">{tDashboard('site_visit_needed')}</div>
-        </Tile>
-        <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium border-b-4 border-error relative overflow-hidden group">
-          <p className="text-caption mb-spacing-md tracking-widest uppercase !text-error/70">{tDashboard('flagged_batches')}</p>
-          <h2 className="text-h1 !text-error">{flaggedCount}</h2>
-          <div className="mt-4 flex items-center gap-1">
-             {[1,2].map(i => <div key={i} className="w-1.5 h-1.5 bg-error rounded-full" />)}
+          <p className="wd-kpi-value">{batchesLoading ? '—' : pendingCount}</p>
+          <p className="wd-kpi-meta wd-kpi-delta">{tDashboard('needs_review')}</p>
+        </div>
+        <div className="wd-kpi-card">
+          <div className="wd-kpi-top">
+            <span className="wd-kpi-label">{tDashboard('approved_today')}</span>
+            <div className="wd-kpi-icon wd-kpi-icon--green"><CheckmarkFilled size={18} /></div>
           </div>
-        </Tile>
+          <p className="wd-kpi-value">{batchesLoading ? '—' : certifiedToday}</p>
+          <p className="wd-kpi-meta">{tDashboard('signed_success')}</p>
+        </div>
+        <div className="wd-kpi-card">
+          <div className="wd-kpi-top">
+            <span className="wd-kpi-label">{tDashboard('field_audits_req')}</span>
+            <div className="wd-kpi-icon wd-kpi-icon--amber"><WarningAltFilled size={18} /></div>
+          </div>
+          <p className="wd-kpi-value">{fieldAuditCount}</p>
+          <p className="wd-kpi-meta wd-kpi-delta--warn">{tDashboard('site_visit_needed')}</p>
+        </div>
+        <div className="wd-kpi-card" style={{ borderTop: '3px solid #dc2626' }}>
+          <div className="wd-kpi-top">
+            <span className="wd-kpi-label" style={{ color: '#dc2626' }}>{tDashboard('flagged_batches')}</span>
+            <div className="wd-kpi-icon" style={{ background: '#fee2e2', color: '#dc2626' }}><CloseFilled size={18} /></div>
+          </div>
+          <p className="wd-kpi-value" style={{ color: '#dc2626' }}>{flaggedCount}</p>
+          <p className="wd-kpi-meta wd-kpi-delta--error">Requires action</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-spacing-md">

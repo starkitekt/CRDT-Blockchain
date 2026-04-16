@@ -338,13 +338,6 @@ export default function SecretaryDashboard() {
     { id: 'himachal',  name: 'Kullu Valley, Himachal',      lat: 31.96, lng: 77.10, farmerCount: 53,  productionKg: 7200,  growthPercent: 22.4, floraType: 'Apple Blossom' },
   ];
 
-  const colorClasses: Record<string, string> = {
-    blue:   'text-blue-600 bg-blue-50',
-    green:  'text-green-600 bg-green-50',
-    orange: 'text-orange-600 bg-orange-50',
-    purple: 'text-purple-600 bg-purple-50',
-  };
-
   const stats = [
     { label: tDashboard('total_state_production'), value: batchesLoading ? '—' : `${(totalProductionKg / 1000).toFixed(1)} ${tDashboard('tons')}`, trend: `${batches.length} batches`, color: 'blue' },
     { label: tDashboard('farmers_benefited'), value: batchesLoading ? '—' : activeFarmers.toLocaleString('en-IN'), trend: `${pendingKycCount} pending KYC`, color: 'green' },
@@ -353,19 +346,15 @@ export default function SecretaryDashboard() {
   ];
 
   const pageHeader = (
-    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-spacing-lg py-spacing-xl animate-fade-in">
-      <div>
-        <h1 className="text-h1 flex items-center gap-4">
-          <div className="p-3 bg-primary/10 rounded-2xl text-primary ring-1 ring-primary/20">
-            <Policy size={32} />
-          </div>
-          {tDashboard('strategic_overview')}
-        </h1>
-        <p className="text-body mt-spacing-xs max-w-lg">{tDashboard('ops_description')}</p>
+    <div className="sd-header">
+      <div className="sd-header-left">
+        <p className="sd-role-tag">Government Secretary · HoneyTRACE</p>
+        <h1 className="sd-title">{tDashboard('strategic_overview')}</h1>
+        <p className="sd-subtitle">{tDashboard('ops_description')}</p>
       </div>
-      <div className="flex gap-spacing-sm shrink-0">
-        <Button kind="secondary" renderIcon={Report} size="lg" className="!rounded-xl shadow-lg border-slate-100" onClick={handleExportMis}>{tDashboard('export_mis')}</Button>
-        <Button kind="primary"   renderIcon={Money}  size="lg" className="!rounded-xl shadow-xl" onClick={() => setIsMspModalOpen(true)}>{tDashboard('update_msp')}</Button>
+      <div className="sd-header-actions">
+        <Button kind="secondary" renderIcon={Report} onClick={handleExportMis}>{tDashboard('export_mis')}</Button>
+        <Button kind="primary"   renderIcon={Money}  onClick={() => setIsMspModalOpen(true)}>{tDashboard('update_msp')}</Button>
       </div>
     </div>
   );
@@ -410,23 +399,25 @@ export default function SecretaryDashboard() {
       <KycQueue />
 
       {/* ── Macro Stats Grid ─────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-spacing-lg">
-        {stats.map((stat, i) => (
-          <Tile key={i} className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
-            <div className={`absolute right-[-20px] top-[-20px] opacity-10 group-hover:rotate-12 transition-transform duration-700 ${colorClasses[stat.color]?.split(' ')[0] ?? 'text-primary'}`}>
-              {i === 0 && <DataAnalytics size={100} />}
-              {i === 1 && <Policy size={100} />}
-              {i === 2 && <Money size={100} />}
-              {i === 3 && <Report size={100} />}
+      <div className="wd-kpi-grid">
+        {stats.map((stat, i) => {
+          const iconVariant = (['blue','green','amber','teal'] as const)[i] ?? 'blue';
+          return (
+            <div key={i} className="wd-kpi-card">
+              <div className="wd-kpi-top">
+                <span className="wd-kpi-label">{stat.label}</span>
+                <div className={`wd-kpi-icon wd-kpi-icon--${iconVariant}`}>
+                  {i === 0 && <DataAnalytics size={18} />}
+                  {i === 1 && <Policy size={18} />}
+                  {i === 2 && <Money size={18} />}
+                  {i === 3 && <Report size={18} />}
+                </div>
+              </div>
+              <p className="wd-kpi-value">{stat.value}</p>
+              <p className="wd-kpi-meta">{stat.trend}</p>
             </div>
-            <span className="text-caption mb-spacing-md tracking-widest uppercase !text-slate-400">{stat.label}</span>
-            <span className="text-h2 text-gradient block">{stat.value}</span>
-            <div className="mt-4 flex items-center gap-2">
-              <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md ${colorClasses[stat.color]}`}>{stat.trend}</span>
-              <span className="text-[10px] text-slate-400 font-medium">{tDashboard('vs_last_month')}</span>
-            </div>
-          </Tile>
-        ))}
+          );
+        })}
       </div>
 
       {/* ── Analytics Section ────────────────────────────────────────── */}
