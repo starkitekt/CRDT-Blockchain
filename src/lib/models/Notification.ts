@@ -8,7 +8,17 @@ export const NOTIFICATION_TYPES = [
   'BATCH_DISPATCHED',
 ] as const;
 
-const NotificationSchema = new Schema(
+export interface INotification {
+  userId: string;
+  type: string;
+  title: string;
+  message: string;
+  batchId?: string;
+  isRead: boolean;
+  createdAt: Date;
+}
+
+const NotificationSchema = new Schema<INotification>(
   {
     userId: { type: String, required: true, index: true },
     type: { type: String, enum: NOTIFICATION_TYPES, required: true, index: true },
@@ -24,15 +34,7 @@ const NotificationSchema = new Schema(
 NotificationSchema.index({ createdAt: -1 });
 NotificationSchema.index({ userId: 1, type: 1, batchId: 1 }, { unique: true, sparse: true });
 
-const ExistingNotificationModel = mongoose.models.Notification as mongoose.Model<{
-  userId: string;
-  type: string;
-  title: string;
-  message: string;
-  batchId?: string;
-  isRead: boolean;
-  createdAt: Date;
-}> | undefined;
+const ExistingNotificationModel = mongoose.models.Notification as mongoose.Model<INotification> | undefined;
 
 if (ExistingNotificationModel) {
   // Hot-reload safety: ensure stale compiled schemas include current fields.
@@ -45,4 +47,4 @@ if (ExistingNotificationModel) {
 }
 
 export const Notification =
-  ExistingNotificationModel || mongoose.model('Notification', NotificationSchema);
+  ExistingNotificationModel || mongoose.model<INotification>('Notification', NotificationSchema);

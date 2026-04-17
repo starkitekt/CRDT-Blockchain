@@ -54,7 +54,8 @@ async function createRolePage(browser: Browser, role: Role, baseUrl: string): Pr
     throw lastAuthError;
   }
 
-  expect(authResponse.status()).toBe(200);
+  expect(authResponse).toBeDefined();
+  expect(authResponse!.status()).toBe(200);
 
   const page = await context.newPage();
   const targetUrl = `${baseUrl}/en/dashboard/${role}`;
