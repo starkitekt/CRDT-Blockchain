@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { User } from '@/lib/models/User';
 import { WarehouseProfile } from '@/lib/models/WarehouseProfile';
+import { Batch } from '@/lib/models/Batch';
 import { requireAuth, handleAuthError, AuthError } from '@/lib/rbac';
 
 export async function GET(req: NextRequest) {
@@ -15,9 +16,36 @@ export async function GET(req: NextRequest) {
       .lean();
 
     const warehouseIds = warehouses.map((w) => w._id);
+    const defaultCapacityKgRaw = Number(process.env.WAREHOUSE_DEFAULT_CAPACITY_KG ?? 5000);
+    const defaultCapacityKg = Number.isFinite(defaultCapacityKgRaw) && defaultCapacityKgRaw > 0
+      ? defaultCapacityKgRaw
+      : 5000;
+
     const profiles = await WarehouseProfile.find({ userId: { $in: warehouseIds } })
       .select('userId storageCapacity currentUtilization')
       .lean();
+
+    const utilizationFromBatches = await Batch.aggregate<{
+      _id: string;
+      usedKg: number;
+    }>([
+      {
+        $match: {
+          warehouseId: { $in: warehouseIds.map((id) => String(id)) },
+          status: { $nin: ['delivered', 'recalled'] },
+        },
+      },
+      {
+        $group: {
+          _id: '$warehouseId',
+          usedKg: { $sum: '$weightKg' },
+        },
+      },
+    ]);
+
+    const usedKgByWarehouseId = new Map(
+      utilizationFromBatches.map((r) => [String(r._id), Number(r.usedKg) || 0])
+    );
 
     const rawLegacyUsers = await User.collection
       .find(
@@ -68,18 +96,28 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(
       warehouses.map((w) => ({
+        ...(function resolveCapacity() {
+          const profile = profileByUserId.get(String(w._id)) ?? fallbackByUserId.get(String(w._id));
+          const usageFromBatches = usedKgByWarehouseId.get(String(w._id)) ?? 0;
+          const currentUtilization = profile?.currentUtilization ?? usageFromBatches;
+
+          if (profile?.storageCapacity != null) {
+            const totalCapacity = profile.storageCapacity;
+            return {
+              totalCapacity,
+              remainingCapacity: Math.max(0, totalCapacity - currentUtilization),
+            };
+          }
+
+          const inferredTotal = Math.max(defaultCapacityKg, currentUtilization);
+          return {
+            totalCapacity: inferredTotal,
+            remainingCapacity: Math.max(0, inferredTotal - currentUtilization),
+          };
+        })(),
         id: String(w._id),
         name: w.name ?? 'Unnamed Warehouse',
         location: w.jurisdiction ?? w.aadhaarKycAddress ?? null,
-        totalCapacity:
-          profileByUserId.get(String(w._id))?.storageCapacity
-          ?? fallbackByUserId.get(String(w._id))?.storageCapacity
-          ?? null,
-        remainingCapacity: (() => {
-          const profile = profileByUserId.get(String(w._id)) ?? fallbackByUserId.get(String(w._id));
-          if (!profile || profile.storageCapacity == null) return null;
-          return Math.max(0, profile.storageCapacity - (profile.currentUtilization ?? 0));
-        })(),
       }))
     );
   } catch (err) {

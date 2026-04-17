@@ -1,96 +1,108 @@
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
-import { AnyUserSchema } from '@/lib/validation/user.schema';
-import { connectDB } from '@/lib/mongodb';
-import { User } from '@/lib/models/User';
-import { auditLog } from '@/lib/audit';
+import { POST as authRegisterPost } from '@/app/api/auth/register/route';
 
+type LegacyPayload = {
+  name?: string;
+  email?: string;
+  password?: string;
+  role?: string;
+  aadhaarNumber?: string;
+  pmKisanId?: string;
+  fssaiLicense?: string;
+  gstNumber?: string;
+  wdraLicenseNo?: string;
+  labRegistrationNo?: string;
+  employeeId?: string;
+  department?: string;
+  jurisdiction?: string;
+  [key: string]: unknown;
+};
 
-// ── Public endpoint — no auth required ────────────────────────────────────────
-// admin and secretary are excluded from self-registration (provisioned manually)
-const SELF_REGISTER_ROLES = new Set([
-  'farmer', 'warehouse', 'lab', 'officer', 'enterprise', 'consumer',
-]);
+function toRoleAwarePayload(body: LegacyPayload) {
+  if (body?.profile && typeof body.profile === 'object') return body;
 
+  const role = String(body.role ?? '');
+  const payload: Record<string, unknown> = {
+    name: body.name,
+    email: body.email,
+    password: body.password,
+    role,
+    profile: {},
+  };
+
+  const profile = payload.profile as Record<string, unknown>;
+
+  if (role === 'farmer') {
+    profile.aadhaarNumber = body.aadhaarNumber;
+    profile.kisanCard = body.pmKisanId;
+    profile.farmLocation = body.farmLocation ?? {
+      village: body.village ?? '',
+      district: body.district ?? '',
+      state: body.state ?? '',
+    };
+  } else if (role === 'warehouse') {
+    profile.aadhaarNumber = body.aadhaarNumber;
+    profile.warehouseName = body.warehouseName ?? body.name ?? '';
+    profile.registrationNumber = body.registrationNumber ?? body.wdraLicenseNo ?? '';
+    profile.storageCapacity = body.storageCapacity;
+    profile.location = body.location ?? {
+      address: body.address ?? '',
+      city: body.city ?? '',
+      state: body.state ?? '',
+      pincode: body.pincode ?? '',
+    };
+  } else if (role === 'lab') {
+    profile.aadhaarNumber = body.aadhaarNumber;
+    profile.labName = body.labName ?? body.name ?? '';
+    profile.fssaiLabNumber = body.fssaiLabNumber ?? body.labRegistrationNo ?? body.fssaiLicense ?? '';
+    profile.location = body.location ?? {
+      address: body.address ?? '',
+      city: body.city ?? '',
+      state: body.state ?? '',
+    };
+  } else if (role === 'officer') {
+    profile.aadhaarNumber = body.aadhaarNumber;
+    profile.employeeId = body.employeeId;
+    profile.department = body.department;
+    profile.authorityLevel = body.authorityLevel;
+  } else if (role === 'enterprise') {
+    profile.companyName = body.companyName ?? body.name ?? '';
+    profile.gstNumber = body.gstNumber;
+    profile.fssaiLicense = body.fssaiLicense;
+    profile.companyPan = body.companyPan;
+    profile.businessType = body.businessType;
+    profile.contactPerson = body.contactPerson ?? { name: body.name ?? '', designation: '' };
+    profile.facilityLocation = body.facilityLocation ?? {
+      address: body.address ?? '',
+      city: body.city ?? '',
+      state: body.state ?? '',
+    };
+  } else if (role === 'secretary') {
+    profile.aadhaarNumber = body.aadhaarNumber;
+    profile.employeeId = body.employeeId;
+    profile.department = body.department;
+    profile.jurisdiction = body.jurisdiction ?? { level: '', region: '' };
+  } else if (role === 'consumer') {
+    profile.aadhaarNumber = body.aadhaarNumber;
+  }
+
+  return payload;
+}
 
 export async function POST(req: NextRequest) {
+  let body: LegacyPayload;
   try {
-    const body = await req.json();
-
-    // ── 1. Validate shape + role-specific required fields ────────────────────
-    const parsed = AnyUserSchema.safeParse(body);
-    if (!parsed.success) {
-      const violations = parsed.error.issues.map(
-        (e) => `${e.path.join('.') || 'field'}: ${e.message}`
-      );
-      return NextResponse.json(
-        { error: 'Validation failed', violations },
-        { status: 400 }
-      );
-    }
-
-    const { email, password, name, role, ...docs } = parsed.data;
-
-    // ── 2. Block admin/secretary self-registration ───────────────────────────
-    if (!SELF_REGISTER_ROLES.has(role)) {
-      return NextResponse.json(
-        { error: 'This role cannot self-register. Contact an administrator.' },
-        { status: 403 }
-      );
-    }
-
-    await connectDB();
-
-    // ── 3. Duplicate email check ──────────────────────────────────────────────
-    const existing = await User.findOne({ email: email.toLowerCase() }).lean();
-    if (existing) {
-      return NextResponse.json(
-        { error: 'An account with this email already exists.' },
-        { status: 409 }
-      );
-    }
-
-    // ── 4. Hash password (12 rounds — production safe) ────────────────────────
-    const passwordHash = await bcrypt.hash(password, 12);
-
-    // ── 5. Create user — kycCompleted defaults to false ───────────────────────
-    const user = await User.create({
-      email:        email.toLowerCase(),
-      passwordHash,
-      role,
-      name,
-      kycCompleted: false,
-      ...docs,
-    });
-
-    // ── 6. Fire-and-forget audit log ──────────────────────────────────────────
-    auditLog({
-      entityType:  'auth',
-      entityId:    String(user._id),
-      action:      'register',
-      actorUserId: String(user._id),
-      actorRole:   role,
-      metadata:    { email },
-    }).catch((err) => console.error('[auditLog] register failed:', err));
-
-    return NextResponse.json(
-      {
-        success: true,
-        message: 'Account created. Await KYC approval before accessing the platform.',
-        userId:  String(user._id),
-      },
-      { status: 201 }
-    );
-
-  } catch (err: any) {
-    // MongoDB duplicate key race condition (two simultaneous registrations)
-    if (err.code === 11000) {
-      return NextResponse.json(
-        { error: 'An account with this email already exists.' },
-        { status: 409 }
-      );
-    }
-    console.error('[register]', err);
-    return NextResponse.json({ error: 'Registration failed' }, { status: 500 });
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
+
+  const normalizedPayload = toRoleAwarePayload(body);
+  const forwardedReq = new NextRequest(req.url, {
+    method: 'POST',
+    headers: req.headers,
+    body: JSON.stringify(normalizedPayload),
+  });
+
+  return authRegisterPost(forwardedReq);
 }

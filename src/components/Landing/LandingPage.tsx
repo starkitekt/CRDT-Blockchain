@@ -355,6 +355,7 @@ export default function LandingPage() {
           <a href="#lp-main" className="lp-nav-link lp-nav-link--active">Home</a>
           <a href="#supply-chain" className="lp-nav-link">Supply Chain</a>
           <a href="#features" className="lp-nav-link">Features</a>
+          <a href={`/${locale}/track`} className="lp-nav-link">Track Journey</a>
           <a href="#auth" className="lp-nav-link">Portal Login</a>
           <a href="#contact" className="lp-nav-link">Contact Us</a>
         </div>
@@ -392,6 +393,15 @@ export default function LandingPage() {
                 </div>
               ))}
             </div>
+            <button
+              type="button"
+              className="lp-submit-btn"
+              style={{ marginTop: '1.25rem', maxWidth: '20rem' }}
+              onClick={() => router.push(`/${locale}/track`)}
+            >
+              Track Product Journey
+              <ArrowRight size={18} />
+            </button>
           </div>
 
           {/* Right: auth card */}
