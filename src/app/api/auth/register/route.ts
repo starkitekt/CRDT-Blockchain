@@ -254,7 +254,7 @@ export async function POST(req: NextRequest) {
 
   const blockchainId = generateBlockchainId(email);
 
-  let user: Awaited<ReturnType<typeof User.create>> | null = null;
+  let user: any = null;
   try {
     user = await User.create({
       name,

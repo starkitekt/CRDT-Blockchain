@@ -184,7 +184,7 @@ export const authApi = {
         address: string;
         city: string;
         state: string;
-        pincode: string;
+        pincode?: string;
         geo?: [number, number];
       };
       storageCapacity?: number;
