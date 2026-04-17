@@ -21,7 +21,6 @@ const NotificationSchema = new Schema(
   { versionKey: false }
 );
 
-NotificationSchema.index({ userId: 1 });
 NotificationSchema.index({ createdAt: -1 });
 NotificationSchema.index({ userId: 1, type: 1, batchId: 1 }, { unique: true, sparse: true });
 

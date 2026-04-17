@@ -271,6 +271,7 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
   const estimatedValue = (safeWeight * (grade === 'A' ? 450 : 380)).toLocaleString('en-IN');
   const latestBatch    = batches[0];
   const certifiedCount = batches.filter(b => b.status === 'certified').length;
+  const selectedWarehouse = warehouses.find((w) => w.id === selectedWarehouseId) ?? null;
 
   /* ── Page header ──────────────────────────────────────────────────── */
   const displayName = profile.name || currentUser.name || '…';
@@ -410,10 +411,27 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
               <SelectItem
                 key={w.id}
                 value={w.id}
-                text={w.location ? `${w.name} (${w.location})` : w.name}
+                text={
+                  w.totalCapacity != null
+                    ? `${w.name} • ${w.remainingCapacity ?? 0}/${w.totalCapacity} kg free${w.location ? ` • ${w.location}` : ''}`
+                    : `${w.name}${w.location ? ` • ${w.location}` : ''} • Capacity NA`
+                }
               />
             ))}
           </Select>
+          {selectedWarehouse && (
+            <div className="text-xs text-slate-600">
+              <p><strong>Warehouse:</strong> {selectedWarehouse.name}</p>
+              {selectedWarehouse.location && <p><strong>Location:</strong> {selectedWarehouse.location}</p>}
+              {selectedWarehouse.totalCapacity != null ? (
+                <p>
+                  <strong>Capacity:</strong> {selectedWarehouse.remainingCapacity ?? 0} kg remaining of {selectedWarehouse.totalCapacity} kg
+                </p>
+              ) : (
+                <p><strong>Capacity:</strong> Not available</p>
+              )}
+            </div>
+          )}
 
           {warehousesError && (
             <InlineNotification kind="error" title="Warehouse load failed" subtitle={warehousesError} lowContrast />

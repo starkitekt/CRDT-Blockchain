@@ -126,6 +126,8 @@ export interface WarehouseOption {
   id: string;
   name: string;
   location: string | null;
+  totalCapacity: number | null;
+  remainingCapacity: number | null;
 }
 
 export const batchesApi = {
@@ -159,7 +161,74 @@ export const recallsApi = {
 export const authApi = {
   login:  (email: string, password: string, role: string) =>
     apiPost<{ success: boolean; role: string }>('/api/auth', { email, password, role }),
-  register: (payload: { name: string; email: string; password: string; role: string }) =>
+  register: (payload: {
+    name: string;
+    email: string;
+    password: string;
+    role: string;
+    profile?: {
+      kisanCard?: string;
+      aadhaarNumber?: string;
+      panNumber?: string;
+      farmLocation?: {
+        village: string;
+        district: string;
+        state: string;
+        geo?: [number, number];
+      };
+      honeyProductionCapacity?: number;
+      organicCertified?: boolean;
+      warehouseName?: string;
+      registrationNumber?: string;
+      location?: {
+        address: string;
+        city: string;
+        state: string;
+        pincode: string;
+        geo?: [number, number];
+      };
+      storageCapacity?: number;
+      currentUtilization?: number;
+      temperatureControlled?: boolean;
+      humidityControl?: boolean;
+      labName?: string;
+      fssaiLabNumber?: string;
+      certifications?: string[];
+      testingCapabilities?: {
+        purityTest: boolean;
+        adulterationTest: boolean;
+        moistureTest: boolean;
+      };
+      authorityLevel?: 'regional' | 'state' | 'national';
+      labAffiliation?: string;
+      companyName?: string;
+      companyPan?: string;
+      businessType?: 'buyer' | 'processor' | 'exporter';
+      contactPerson?: {
+        name: string;
+        designation: string;
+      };
+      facilityLocation?: {
+        address: string;
+        city: string;
+        state: string;
+      };
+      processingCapacity?: number;
+      jurisdiction?: {
+        level: 'district' | 'state' | 'national';
+        region: string;
+      };
+      permissions?: {
+        approveStakeholders: boolean;
+        auditAccess: boolean;
+        complianceControl: boolean;
+      };
+      preferences?: {
+        organicOnly: boolean;
+        preferredRegions: string[];
+      };
+    };
+  }) =>
     apiPost<{ token: string; user: { id: string; name: string; email: string; role: string; kycCompleted: boolean } }>('/api/auth/register', payload),
   logout: () => apiDelete<{ success: boolean }>('/api/auth'),
 };

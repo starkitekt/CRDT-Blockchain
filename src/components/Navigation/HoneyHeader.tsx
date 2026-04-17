@@ -75,6 +75,7 @@ const HoneyHeader = () => {
   const [isNotificationsLoading, setIsNotificationsLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const hasLoadedNotifications = useRef(false);
+  const isPublicRoute = pathname === "/en" || pathname === "/hi" || pathname === "/";
 
   const currentRole = useMemo(
     () =>
@@ -83,6 +84,13 @@ const HoneyHeader = () => {
   );
 
   useEffect(() => {
+    if (isPublicRoute) {
+      setIsNotificationsLoading(false);
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+
     let cancelled = false;
 
     const load = async () => {
@@ -111,7 +119,7 @@ const HoneyHeader = () => {
       cancelled = true;
       window.clearInterval(pollId);
     };
-  }, [currentRole.id]);
+  }, [currentRole.id, isPublicRoute]);
 
   const markAsRead = async (id: string) => {
     setNotifications((prev) =>
@@ -154,7 +162,7 @@ const HoneyHeader = () => {
     router.push("/");
   };
 
-  if (pathname === "/en" || pathname === "/hi" || pathname === "/") {
+  if (isPublicRoute) {
     return null;
   }
 
