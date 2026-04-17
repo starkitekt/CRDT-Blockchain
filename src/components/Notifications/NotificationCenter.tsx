@@ -30,18 +30,22 @@ export interface NotificationItem {
 
 interface NotificationCenterProps {
   isOpen: boolean;
+  isLoading?: boolean;
   onCloseAction: () => void;
   notifications: NotificationItem[];
   onMarkAsReadAction: (id: string) => void;
   onClearAllAction: () => void;
+  onOpenNotificationAction?: (id: string) => void;
 }
 
 export default function NotificationCenter({
   isOpen,
+  isLoading = false,
   onCloseAction,
   notifications,
   onMarkAsReadAction,
-  onClearAllAction
+  onClearAllAction,
+  onOpenNotificationAction,
 }: NotificationCenterProps) {
   const tc = useTranslations('common');
 
@@ -89,10 +93,14 @@ export default function NotificationCenter({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-spacing-md bg-background/30">
-          {notifications.length === 0 ? (
+          {isLoading ? (
+            <div className="h-full flex flex-col items-center justify-center opacity-70">
+              <p className="text-body">Loading notifications...</p>
+            </div>
+          ) : notifications.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center opacity-40 grayscale">
               <Notification size={48} className="mb-spacing-md" />
-              <p className="text-body">{tc('all_caught_up')}</p>
+              <p className="text-body">No notifications</p>
             </div>
           ) : (
             <Stack gap={4}>
@@ -104,7 +112,10 @@ export default function NotificationCenter({
                       ? 'bg-surface opacity-60 border-border-subtle'
                       : 'bg-background border-primary shadow-sm'
                     }`}
-                  onClick={() => onMarkAsReadAction(notif.id)}
+                  onClick={() => {
+                    onMarkAsReadAction(notif.id);
+                    onOpenNotificationAction?.(notif.id);
+                  }}
                 >
                   {!notif.read && (
                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-l" />

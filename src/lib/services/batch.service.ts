@@ -2,6 +2,8 @@
 import { ethers } from 'ethers';
 import { connectDB } from '../mongodb';
 import { Batch } from '../models/Batch';
+import { User } from '../models/User';
+import { Notification } from '../models/Notification';
 import { getNextSeq } from '../models/Counter';
 import { auditLog } from '../audit';
 import { CreateBatchInput, PatchBatchInput } from '../validation/batch.schema';
@@ -9,22 +11,65 @@ import { anchorBatchOnChain, isBlockchainRelayEnabled } from '../blockchain-rela
 
 
 // â”€â”€ GS1 CBV BizStep mapping â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const STATUS_ALIASES: Record<string, 'created' | 'stored' | 'certified' | 'approved' | 'dispatched' | 'delivered' | 'recalled'> = {
+  created: 'created',
+  pending: 'created',
+  stored: 'stored',
+  in_warehouse: 'stored',
+  certified: 'certified',
+  in_testing: 'certified',
+  approved: 'approved',
+  dispatched: 'dispatched',
+  delivered: 'delivered',
+  recalled: 'recalled',
+};
+
 const BIZ_STEP: Record<string, string> = {
-  pending: 'commissioning',
-  in_testing: 'inspecting',
-  certified: 'accepting',
-  in_warehouse: 'storing',
+  created: 'commissioning',
+  stored: 'storing',
+  certified: 'inspecting',
+  approved: 'accepting',
   dispatched: 'departing',
+  delivered: 'receiving',
   recalled: 'returning',
 };
 
 // Statuses that trigger a new on-chain anchor
 const ANCHOR_ON_STATUS = new Set([
-  'certified',      // was 'lab_approved'   â†’ lab certifies the batch
-  'in_warehouse',   // was 'warehouse_stored' â†’ batch received at warehouse
-  'dispatched',     // âœ… already correct
-  'recalled',       // âœ… already correct
+  'stored',
+  'certified',
+  'approved',
+  'dispatched',
+  'delivered',
+  'recalled',
 ]);
+
+const STATUS_ORDER: Array<'created' | 'stored' | 'certified' | 'approved' | 'dispatched' | 'delivered'> = [
+  'created', 'stored', 'certified', 'approved', 'dispatched', 'delivered',
+];
+
+const NOTIFICATION_BY_STATUS: Record<string, { type: string; title: string; message: string }> = {
+  stored: {
+    type: 'BATCH_TESTED',
+    title: 'Batch Stored',
+    message: 'Your honey batch has been received and stored by the warehouse.',
+  },
+  certified: {
+    type: 'BATCH_CERTIFIED',
+    title: 'Batch Certified',
+    message: 'Your honey batch has passed testing and is certified.',
+  },
+  recalled: {
+    type: 'BATCH_RECALLED',
+    title: 'Batch Recalled',
+    message: 'Your honey batch has been marked as recalled.',
+  },
+  dispatched: {
+    type: 'BATCH_DISPATCHED',
+    title: 'Batch Dispatched',
+    message: 'Your honey batch has been dispatched to the next stage.',
+  },
+};
 
 
 // â”€â”€ Local type extension â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -112,8 +157,23 @@ function stripInternal(doc: BatchDocLike) {
   delete rest._id;
   delete rest._payloadHash;
   delete rest.__v;
+  const normalizedImages = Array.isArray((rest as { images?: unknown[] }).images)
+    ? ((rest as { images?: unknown[] }).images as unknown[]).map((img) => {
+        if (typeof img === 'string') {
+          return { url: img, latitude: null, longitude: null };
+        }
+        const obj = img as { url?: unknown; latitude?: unknown; longitude?: unknown };
+        return {
+          url: typeof obj.url === 'string' ? obj.url : '',
+          latitude: typeof obj.latitude === 'number' ? obj.latitude : null,
+          longitude: typeof obj.longitude === 'number' ? obj.longitude : null,
+        };
+      }).filter((img) => img.url)
+    : undefined;
+
   return {
     ...rest,
+    images: normalizedImages,
     id: doc._id != null ? String(doc._id) : (doc.batchId ?? ''),
     payloadHash: doc._payloadHash ?? null,
   }; // expose payload hash + stable id for frontend tables/actions
@@ -134,6 +194,23 @@ function resolveLocation(
   return `${lat},${lng}`;
 }
 
+function normalizeStatus(status: string): 'created' | 'stored' | 'certified' | 'approved' | 'dispatched' | 'delivered' | 'recalled' {
+  return STATUS_ALIASES[status] ?? 'created';
+}
+
+function isValidStatusTransition(currentStatus: string, nextStatus: string): boolean {
+  const current = normalizeStatus(currentStatus);
+  const next = normalizeStatus(nextStatus);
+
+  if (current === next) return true;
+  if (next === 'recalled') return current !== 'delivered';
+  if (current === 'recalled' || current === 'delivered') return false;
+
+  const currentIdx = STATUS_ORDER.indexOf(current);
+  const nextIdx = STATUS_ORDER.indexOf(next);
+  return nextIdx === currentIdx + 1;
+}
+
 
 // â”€â”€ Create â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -143,6 +220,10 @@ export async function createBatch(
   actorRole = 'farmer'
 ) {
   await connectDB();
+
+  if (!input.warehouseId?.trim()) {
+    throw new Error('MISSING_WAREHOUSE_ID');
+  }
 
   // â”€â”€ Moisture business rule â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (input.moisturePct > 20) {
@@ -175,11 +256,12 @@ export async function createBatch(
   // â”€â”€ Anchor on chain â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (isBlockchainRelayEnabled()) {
     try {
-      const chainPayload = buildChainPayload(batchId, input, 'pending');
+      const canonicalStatus = normalizeStatus('pending');
+      const chainPayload = buildChainPayload(batchId, input, canonicalStatus);
       const txHash = await anchorBatchOnChain(
         batchId,
         chainPayload,
-        BIZ_STEP['pending'],
+        BIZ_STEP[canonicalStatus],
         `${input.latitude ?? ''},${input.longitude ?? ''}`
       );
       batch.onChainTxHash = txHash;
@@ -188,6 +270,34 @@ export async function createBatch(
     } catch (chainErr) {
       console.error('[batch.service] Chain anchor failed â€” batch saved to DB only:', chainErr);
     }
+  }
+
+  try {
+    const warehouse = await User.findOne({ _id: input.warehouseId, role: 'warehouse' }).select('_id').lean();
+    if (warehouse) {
+      // Strict targeting: only the selected warehouse receives BATCH_CREATED.
+      await Notification.findOneAndUpdate(
+        {
+          userId: String(batch.warehouseId),
+          type: 'BATCH_CREATED',
+          batchId,
+        },
+        {
+          $setOnInsert: {
+            userId: String(batch.warehouseId),
+            type: 'BATCH_CREATED',
+            title: 'New Batch Assigned',
+            message: 'A new honey batch has been assigned to your warehouse',
+            batchId,
+            isRead: false,
+            createdAt: new Date(),
+          },
+        },
+        { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
+      );
+    }
+  } catch (notificationErr) {
+    console.error('[batch.service] Failed to create BATCH_CREATED notification:', notificationErr);
   }
 
   await auditLog({
@@ -242,12 +352,18 @@ export async function patchBatch(
 
   const before = batch.toObject();
   const newStatus = updates.status ?? batch.status;
-  const statusChanged = updates.status && updates.status !== batch.status;
+  const statusChanged = Boolean(updates.status && normalizeStatus(updates.status) !== normalizeStatus(String(batch.status)));
+
+  if (updates.status && !isValidStatusTransition(String(batch.status), updates.status)) {
+    throw new Error(`INVALID_STATUS_TRANSITION:${String(batch.status)}->${updates.status}`);
+  }
 
   Object.assign(batch, updates);
 
   // â”€â”€ Re-anchor at key supply chain milestones â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  if (statusChanged && ANCHOR_ON_STATUS.has(newStatus) && isBlockchainRelayEnabled()) {
+  const normalizedNewStatus = normalizeStatus(String(newStatus));
+
+  if (statusChanged && ANCHOR_ON_STATUS.has(normalizedNewStatus) && isBlockchainRelayEnabled()) {
     try {
       const chainPayload = buildChainPayload(id, {
         farmerId: batch.farmerId,
@@ -256,12 +372,12 @@ export async function patchBatch(
         harvestDate: batch.harvestDate,
         moisturePct: batch.moisturePct,
         grade: batch.grade,
-      }, newStatus);
+      }, normalizedNewStatus);
 
       const txHash = await anchorBatchOnChain(
         id,
         chainPayload,
-        BIZ_STEP[newStatus] ?? 'unknown',
+        BIZ_STEP[normalizedNewStatus] ?? 'unknown',
         resolveLocation(updates, batch)   // â† fixes TS2339
       );
 
@@ -274,6 +390,36 @@ export async function patchBatch(
 
   await batch.save();
 
+  const previousStatus = normalizeStatus(String(before.status ?? 'created'));
+  if (statusChanged && normalizedNewStatus !== previousStatus) {
+    const config = NOTIFICATION_BY_STATUS[normalizedNewStatus];
+    if (config && batch.farmerId) {
+      try {
+        await Notification.findOneAndUpdate(
+          {
+            userId: String(batch.farmerId),
+            type: config.type,
+            batchId: id,
+          },
+          {
+            $setOnInsert: {
+              userId: String(batch.farmerId),
+              type: config.type,
+              title: config.title,
+              message: config.message,
+              batchId: id,
+              isRead: false,
+              createdAt: new Date(),
+            },
+          },
+          { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
+        );
+      } catch (notificationErr) {
+        console.error(`[batch.service] Failed to create ${config.type} notification:`, notificationErr);
+      }
+    }
+  }
+
   await auditLog({
     entityType: 'batch',
     entityId: id,
@@ -283,7 +429,7 @@ export async function patchBatch(
     metadata: {
       before: stripInternal(before),
       after: updates,
-      chainAnchored: statusChanged && ANCHOR_ON_STATUS.has(newStatus),
+      chainAnchored: statusChanged && ANCHOR_ON_STATUS.has(normalizedNewStatus),
     },
   });
 

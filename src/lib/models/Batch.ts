@@ -1,8 +1,8 @@
 import mongoose, { Schema } from 'mongoose';
 
 export type BatchStatus =
-  | 'pending' | 'in_warehouse' | 'in_testing'
-  | 'certified' | 'dispatched' | 'recalled';
+  | 'created' | 'stored' | 'certified' | 'approved' | 'dispatched' | 'delivered' | 'recalled'
+  | 'pending' | 'in_warehouse' | 'in_testing';
 
 const BatchSchema = new Schema(
   {
@@ -17,16 +17,31 @@ const BatchSchema = new Schema(
     longitude: { type: String, required: true },
     grade: { type: String, enum: ['A', 'B'], required: true },
     harvestDate: { type: String, required: true },
+    images: [{
+      url: { type: String, required: true },
+      latitude: { type: Number, default: null },
+      longitude: { type: Number, default: null },
+    }],
 
     status: {
       type: String,
-      enum: ['pending', 'in_warehouse', 'in_testing', 'certified', 'dispatched', 'recalled'],
+      enum: [
+        'created', 'stored', 'certified', 'approved', 'dispatched', 'delivered', 'recalled',
+        // Legacy aliases kept for backward compatibility
+        'pending', 'in_warehouse', 'in_testing',
+      ],
       default: 'pending',
       index: true,
     },
 
     // ── Warehouse ────────────────────────────────────────────────────────────
-    warehouseId: { type: String, index: true },
+    warehouseId: {
+      type: String,
+      index: true,
+      required: function requiredWarehouseId(this: { isNew: boolean }) {
+        return this.isNew;
+      },
+    },
     warehouseReceivedAt: { type: Date },
     warehouseNotes: { type: String },
 

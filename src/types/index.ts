@@ -50,6 +50,11 @@ export type RecallTier = 1 | 2 | 3;
 
 /** Batch lifecycle states */
 export type BatchStatus =
+  | 'created'
+  | 'stored'
+  | 'approved'
+  | 'delivered'
+  // Legacy aliases kept for backward compatibility
   | 'pending'
   | 'in_warehouse'
   | 'in_testing'
@@ -75,6 +80,12 @@ export interface LabResultsSubdoc {
   passed?:      boolean;  // Codex Stan 12-1981 overall pass/fail
 }
 
+export interface BatchImage {
+  url: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
 
 export interface Batch {
   // ── Core identity ────────────────────────────────────────────────────────
@@ -92,6 +103,7 @@ export interface Batch {
   longitude:    string;
   grade:        'A' | 'B';
   harvestDate:  string;       // ISO date string
+  images?:      BatchImage[];
   status:       BatchStatus;
   createdAt:    string;       // ISO 8601
   updatedAt?:   string;

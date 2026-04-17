@@ -185,17 +185,16 @@ export default function LabDashboard() {
     formRootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const headerActions = (
-    <Button kind="primary" renderIcon={Add} onClick={handleNewSample}>{tDashboard('new_sample')}</Button>
-  );
-
   const pageHeader = (
-    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-spacing-lg py-spacing-xl animate-fade-in">
-      <div>
-        <h1 className="text-h1">{tDashboard('lab_header')}</h1>
-        <p className="text-body mt-spacing-xs max-w-lg">{tDashboard('lab_description')}</p>
+    <div className="ld-header">
+      <div className="ld-header-left">
+        <p className="ld-role-tag">Lab Analysis · HoneyTRACE</p>
+        <h1 className="ld-title">{tDashboard('lab_header')}</h1>
+        <p className="ld-subtitle">{tDashboard('lab_description')}</p>
       </div>
-      <div className="shrink-0">{headerActions}</div>
+      <div className="ld-header-actions">
+        <Button kind="primary" renderIcon={Add} onClick={handleNewSample}>{tDashboard('new_sample')}</Button>
+      </div>
     </div>
   );
 
@@ -205,43 +204,31 @@ export default function LabDashboard() {
       <GuidedTour steps={tourSteps} isOpen={isTourOpen} onClose={closeTour} onComplete={completeTour} />
 
       {/* Lab Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-spacing-lg">
-        <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
-          <div className="absolute right-[-20px] top-[-20px] opacity-10 group-hover:rotate-12 transition-transform duration-700">
-            <Chemistry size={120} />
+      <div className="wd-kpi-grid">
+        <div className="wd-kpi-card">
+          <div className="wd-kpi-top">
+            <span className="wd-kpi-label">{tDashboard('pending_samples')}</span>
+            <div className="wd-kpi-icon wd-kpi-icon--blue"><Chemistry size={18} /></div>
           </div>
-          <div className="flex items-center gap-spacing-md">
-            <div className="p-3 bg-primary/10 rounded-xl text-primary"><Chemistry size={24} /></div>
-            <div>
-              <p className="text-caption">{tDashboard('pending_samples')}</p>
-              <h2 className="text-h1 text-gradient">{batchesLoading ? '—' : pendingCount}</h2>
-            </div>
+          <p className="wd-kpi-value">{batchesLoading ? '—' : pendingCount}</p>
+          <p className="wd-kpi-meta">Awaiting analysis</p>
+        </div>
+        <div className="wd-kpi-card">
+          <div className="wd-kpi-top">
+            <span className="wd-kpi-label">{tDashboard('certs_issued')}</span>
+            <div className="wd-kpi-icon wd-kpi-icon--green"><Certificate size={18} /></div>
           </div>
-        </Tile>
-        <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
-          <div className="absolute right-[-20px] top-[-20px] opacity-10 group-hover:scale-110 transition-transform duration-700 text-success">
-            <Certificate size={120} />
+          <p className="wd-kpi-value">{resultsLoading ? '—' : certifiedCount}</p>
+          <p className="wd-kpi-meta">Published to ledger</p>
+        </div>
+        <div className="wd-kpi-card">
+          <div className="wd-kpi-top">
+            <span className="wd-kpi-label">{tDashboard('alerts_rejections')}</span>
+            <div className="wd-kpi-icon wd-kpi-icon--amber"><Information size={18} /></div>
           </div>
-          <div className="flex items-center gap-spacing-md">
-            <div className="p-3 bg-success/10 rounded-xl text-success"><Certificate size={24} /></div>
-            <div>
-              <p className="text-caption">{tDashboard('certs_issued')}</p>
-              <h2 className="text-h1 text-gradient">{resultsLoading ? '—' : certifiedCount}</h2>
-            </div>
-          </div>
-        </Tile>
-        <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
-          <div className="absolute right-[-20px] top-[-20px] opacity-10 group-hover:rotate-[-12deg] transition-transform duration-700 text-error">
-            <Information size={120} />
-          </div>
-          <div className="flex items-center gap-spacing-md">
-            <div className="p-3 bg-error/10 rounded-xl text-error"><Information size={24} /></div>
-            <div>
-              <p className="text-caption">{tDashboard('alerts_rejections')}</p>
-              <h2 className="text-h1 text-gradient">{batchesLoading ? '—' : alertCount}</h2>
-            </div>
-          </div>
-        </Tile>
+          <p className="wd-kpi-value">{batchesLoading ? '—' : alertCount}</p>
+          <p className="wd-kpi-meta wd-kpi-delta--warn">Recalled batches</p>
+        </div>
       </div>
 
       {/* Lab Workflow */}

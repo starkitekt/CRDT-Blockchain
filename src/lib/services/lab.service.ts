@@ -38,7 +38,7 @@ export async function publishLabResult(
     throw new Error('BATCH_NOT_FOUND');
   }
 
-  if (batch.status !== 'in_warehouse') {
+  if (batch.status !== 'in_warehouse' && batch.status !== 'stored') {
     throw new Error('BATCH_NOT_IN_WAREHOUSE');
   }
 

@@ -2,96 +2,131 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
 import {
-  Tile,
   Button,
-  TableContainer,
-  Table,
-  TableHead,
-  TableRow,
-  TableHeader,
-  TableBody,
-  TableCell,
-  Tag,
   Modal,
   TextInput,
   NumberInput,
+  Select,
+  SelectItem,
   Stack,
   InlineNotification,
   DataTableSkeleton,
+  Tag,
 } from '@carbon/react';
-import { Add, Sun, Chemistry, Growth, Location } from '@carbon/icons-react';
+import {
+  Add,
+  Sun,
+  Growth,
+  Location,
+  Checkmark,
+  Warning,
+  Chemistry,
+  Blockchain,
+  QrCode,
+  Time,
+  DataTable as DataTableIcon,
+} from '@carbon/icons-react';
 import QRCodeGenerator from '@/components/Traceability/QRCodeGenerator';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useUserProfile } from '@/hooks/useUserProfile';
 import { useBatches } from '@/hooks/useBatches';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
-import { batchesApi, ApiError } from '@/lib/api';
+import { batchesApi, warehousesApi, ApiError, type WarehouseOption } from '@/lib/api';
 import GuidedTour from '@/components/Onboarding/GuidedTour';
 import SimplifiedFarmerOnboarding from '@/components/Onboarding/SimplifiedFarmerOnboarding';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
-import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
-import PriorStepQR from '@/components/Traceability/PriorStepQR';
-import EmptyState from '@/components/EmptyState';
 import CopyableValue from '@/components/CopyableValue';
 
+/* ── Status helpers ─────────────────────────────────────────────────────── */
+const STATUS_META: Record<string, { label: string; type: 'green' | 'blue' | 'purple' | 'red' | 'gray' }> = {
+  created:      { label: 'Created',       type: 'gray'   },
+  pending:      { label: 'Created',       type: 'gray'   },
+  stored:       { label: 'Stored',        type: 'blue'   },
+  certified:    { label: 'Certified',     type: 'green'  },
+  approved:     { label: 'Approved',      type: 'green'  },
+  delivered:    { label: 'Delivered',     type: 'green'  },
+  recalled:     { label: 'Recalled',      type: 'red'    },
+  in_testing:   { label: 'Tested',        type: 'purple' },
+  dispatched:   { label: 'Dispatched',    type: 'blue'   },
+  in_warehouse: { label: 'Stored',        type: 'blue'   },
+};
+const getStatus = (s: string) => STATUS_META[s] ?? { label: s.replace(/_/g, ' '), type: 'gray' as const };
 
-export default function FarmerDashboard({
-  params }: { params: Promise<{ locale: string }> }) {
+function hasInvalidImageSelection(files: File[]): boolean {
+  if (files.length > 5) return true;
+  const validTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+  for (const file of files) {
+    if (!validTypes.has(file.type)) return true;
+    if (file.size > 5 * 1024 * 1024) return true;
+  }
+  return false;
+}
+
+/* ════════════════════════════════════════════════════════════════════════ */
+export default function FarmerDashboard({ params }: { params: Promise<{ locale: string }> }) {
+  const router = useRouter();
   const currentUser = useCurrentUser();
-  const { locale } = React.use(params);
-  const t = useTranslations('Dashboard.farmer');
-  const tTour = useTranslations('Onboarding.farmer');
-  const { isTourOpen, isKYCOpen: isOnboardingOpen, completeKYC: completeOnboarding, completeTour, closeTour } = useOnboarding({ role: 'farmer', hasKYC: true });
+  const { profile, loading: profileLoading } = useUserProfile();
+  const { locale }  = React.use(params);
+  const t           = useTranslations('Dashboard.farmer');
+  const tTour       = useTranslations('Onboarding.farmer');
 
-  // ── Data ──────────────────────────────────────────────────────────────────
-  const { batches, loading, error: fetchError, refresh } = useBatches({ farmerId:   currentUser.userId });
+  const { isTourOpen, isKYCOpen: isOnboardingOpen, completeKYC: completeOnboarding, completeTour, closeTour } =
+    useOnboarding({ role: 'farmer', hasKYC: true });
+
+  /* ── Data ─────────────────────────────────────────────────────────── */
+  const { batches, loading, error: fetchError, refresh } = useBatches({ farmerId: currentUser.userId });
   const { notifications: syncNotifs, dismiss: dismissSync } = useOfflineSync();
 
-  // ── Modal / form state ────────────────────────────────────────────────────
+  /* ── Modal / form ─────────────────────────────────────────────────── */
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [floraType, setFloraType] = useState('');
-  const [moistureValue, setMoistureValue] = useState(18);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [grade, setGrade] = useState<'A' | 'B'>('A');
-  // ── QR auto-show after batch registration ─────────────────────────────────
-  const [createdBatchId, setCreatedBatchId] = useState<string | null>(null);
-  const [weight, setWeight] = useState(100);
+  const [isSubmitting, setIsSubmitting]           = useState(false);
+  const [submitError, setSubmitError]             = useState<string | null>(null);
+  const [floraType, setFloraType]                 = useState('');
+  const [moistureValue, setMoistureValue]         = useState(18);
+  const [formErrors, setFormErrors]               = useState<Record<string, string>>({});
+  const [grade, setGrade]                         = useState<'A' | 'B'>('A');
+  const [createdBatchId, setCreatedBatchId]       = useState<string | null>(null);
+  const [weight, setWeight]                       = useState(100);
+  const [selectedImages, setSelectedImages]       = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews]         = useState<string[]>([]);
+  const [imageGeo, setImageGeo]                   = useState<{ latitude: number | null; longitude: number | null }>({ latitude: null, longitude: null });
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
+  const [warehouses, setWarehouses]               = useState<WarehouseOption[]>([]);
+  const [warehousesLoading, setWarehousesLoading] = useState(false);
+  const [warehousesError, setWarehousesError]     = useState<string | null>(null);
+  const [navigatingBatchId, setNavigatingBatchId] = useState<string | null>(null);
 
-  // ── GPS ───────────────────────────────────────────────────────────────────
-  const [gpsReady, setGpsReady] = useState(false);
-  const [gpsCoords, setGpsCoords] = useState('');
-  const [gpsLat, setGpsLat] = useState('22.8465');
-  const [gpsLng, setGpsLng] = useState('81.3340');
-  const [gpsError, setGpsError] = useState('');
-  const [weatherTemp, setWeatherTemp] = useState<number | null>(null);
+  /* ── GPS ──────────────────────────────────────────────────────────── */
+  const [gpsReady,   setGpsReady]   = useState(false);
+  const [gpsCoords,  setGpsCoords]  = useState('');
+  const [gpsLat,     setGpsLat]     = useState('22.8465');
+  const [gpsLng,     setGpsLng]     = useState('81.3340');
+  const [gpsError,   setGpsError]   = useState('');
+
+  /* ── Weather ──────────────────────────────────────────────────────── */
+  const [weatherTemp,     setWeatherTemp]     = useState<number | null>(null);
   const [weatherHumidity, setWeatherHumidity] = useState<number | null>(null);
-  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherLoading,  setWeatherLoading]  = useState(false);
 
   useEffect(() => {
-    if (!navigator.geolocation) {
-      setGpsError('GPS not supported');
-      return;
-    }
+    if (!navigator.geolocation) { setGpsError('GPS not supported'); return; }
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const lat = pos.coords.latitude.toFixed(4);
         const lon = pos.coords.longitude.toFixed(4);
-        setGpsLat(lat);
-        setGpsLng(lon);
+        setGpsLat(lat); setGpsLng(lon);
         setGpsCoords(`${lat}° N, ${lon}° E`);
-        setGpsReady(true);
-        setGpsError('');
+        setGpsReady(true); setGpsError('');
       },
       (err) => {
         if (err.code === err.PERMISSION_DENIED) {
           setGpsCoords('22.8465° N, 81.3340° E (Demo)');
           setGpsReady(true);
-        } else {
-          setGpsError(err.message);
-        }
+        } else { setGpsError(err.message); }
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
     );
@@ -104,122 +139,195 @@ export default function FarmerDashboard({
     setWeatherLoading(true);
     fetch(`https://api.open-meteo.com/v1/forecast?latitude=${gpsLat}&longitude=${gpsLng}&current=temperature_2m,relative_humidity_2m`)
       .then(async (res) => {
-        if (!res.ok) throw new Error('Failed to fetch weather');
-        return res.json() as Promise<{
-          current?: {
-            temperature_2m?: number;
-            relative_humidity_2m?: number;
-          };
-        }>;
+        if (!res.ok) throw new Error();
+        return res.json() as Promise<{ current?: { temperature_2m?: number; relative_humidity_2m?: number } }>;
       })
       .then((data) => {
         if (cancelled) return;
         setWeatherTemp(typeof data.current?.temperature_2m === 'number' ? data.current.temperature_2m : null);
         setWeatherHumidity(typeof data.current?.relative_humidity_2m === 'number' ? data.current.relative_humidity_2m : null);
       })
-      .catch(() => {
-        if (cancelled) return;
-        setWeatherTemp(null);
-        setWeatherHumidity(null);
-      })
-      .finally(() => {
-        if (!cancelled) setWeatherLoading(false);
-      });
-
+      .catch(() => { if (!cancelled) { setWeatherTemp(null); setWeatherHumidity(null); } })
+      .finally(() => { if (!cancelled) setWeatherLoading(false); });
     return () => { cancelled = true; };
   }, [gpsReady, gpsLat, gpsLng]);
 
-  // ── Tour ──────────────────────────────────────────────────────────────────
+  /* ── Tour ─────────────────────────────────────────────────────────── */
   const tourSteps = [
     { label: tTour('step1_title'), title: tTour('step1_title'), description: tTour('step1_desc') },
     { label: tTour('step2_title'), title: tTour('step2_title'), description: tTour('step2_desc') },
     { label: tTour('step3_title'), title: tTour('step3_title'), description: tTour('step3_desc') },
   ];
 
-  // ── Form validation ───────────────────────────────────────────────────────
+  /* ── Validation ───────────────────────────────────────────────────── */
   const validateHarvestForm = (): boolean => {
     const errors: Record<string, string> = {};
-    if (!floraType.trim()) errors.floraType = 'Flora type is required';
-    if (weight <= 0)     errors.weight = 'Weight must be greater than 0';
-    if (weight > 5000)   errors.weight = 'Weight cannot exceed 5,000 kg';
-    if (moistureValue < 10 || moistureValue > 25) errors.moisture = 'Moisture must be 10–25%';
-    if (!gpsReady)       errors.gps = 'GPS lock required before submission';
+    if (!floraType.trim())                             errors.floraType = 'Flora type is required';
+    if (weight <= 0)                                   errors.weight    = 'Weight must be greater than 0';
+    if (weight > 5000)                                 errors.weight    = 'Weight cannot exceed 5,000 kg';
+    if (moistureValue < 10 || moistureValue > 25)      errors.moisture  = 'Moisture must be between 10% and 25%';
+    if (!gpsReady)                                     errors.gps       = 'GPS lock required before submission';
+    if (!selectedWarehouseId)                          errors.warehouse = 'Warehouse selection is required';
+    if (selectedImages.length > 5)                     errors.images    = 'You can upload at most 5 images';
+    if (selectedImages.length > 0) {
+      const validTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+      for (const file of selectedImages) {
+        if (!validTypes.has(file.type)) errors.images = 'Only jpeg, png, and webp images are allowed';
+        if (file.size > 5 * 1024 * 1024) errors.images = 'Each image must be 5MB or smaller';
+      }
+    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  // ── Submit → POST /api/batches ────────────────────────────────────────────
+  /* ── Submit ───────────────────────────────────────────────────────── */
   const handleRecordSubmit = async () => {
     if (!validateHarvestForm()) return;
-    setIsSubmitting(true);
-    setSubmitError(null);
-
+    setIsSubmitting(true); setSubmitError(null);
     try {
-      const res = await batchesApi.create({
-        farmerId:   currentUser.userId,
-        farmerName: currentUser.name,
-        floraType,
-        weightKg:   weight,
-        moisturePct: moistureValue,
-        latitude:   gpsLat,
-        longitude:  gpsLng,
-        grade,
-        harvestDate: new Date().toISOString().slice(0, 10),
-      });
+      const formData = new FormData();
+      formData.append('farmerId', currentUser.userId);
+      formData.append('farmerName', currentUser.name);
+      formData.append('floraType', floraType);
+      formData.append('weightKg', String(weight));
+      formData.append('moisturePct', String(moistureValue));
+      formData.append('latitude', gpsLat);
+      formData.append('longitude', gpsLng);
+      formData.append('grade', grade);
+      formData.append('harvestDate', new Date().toISOString().slice(0, 10));
+      formData.append('warehouseId', selectedWarehouseId);
+      formData.append('imageLatitude', imageGeo.latitude == null ? '' : String(imageGeo.latitude));
+      formData.append('imageLongitude', imageGeo.longitude == null ? '' : String(imageGeo.longitude));
+      selectedImages.forEach((file) => formData.append('images', file));
+
+      const res = await batchesApi.create(formData);
       refresh();
       setIsRecordModalOpen(false);
-      setFloraType('');
-      setMoistureValue(18);
-      setWeight(100);
-      setFormErrors({});
-      // Auto-show QR modal for the newly registered batch
+      setFloraType(''); setMoistureValue(18); setWeight(100); setFormErrors({}); setSelectedImages([]); setImagePreviews([]); setSelectedWarehouseId(''); setImageGeo({ latitude: null, longitude: null });
       const newId = res?.data?.batchId ?? res?.data?.id;
       if (newId) setCreatedBatchId(String(newId));
     } catch (err) {
-      setSubmitError(
-        err instanceof ApiError ? err.message : 'Failed to record harvest. Please try again.',
-      );
+      setSubmitError(err instanceof ApiError ? err.message : 'Failed to record harvest. Please try again.');
+    } finally { setIsSubmitting(false); }
+  };
+
+  const loadWarehouses = async () => {
+    setWarehousesLoading(true);
+    setWarehousesError(null);
+    try {
+      const data = await warehousesApi.list();
+      setWarehouses(data);
+    } catch (err) {
+      setWarehouses([]);
+      setWarehousesError(err instanceof ApiError ? err.message : 'Failed to load warehouses');
     } finally {
-      setIsSubmitting(false);
+      setWarehousesLoading(false);
     }
   };
 
-  // ── Derived KPIs ──────────────────────────────────────────────────────────
-  const totalWeight = batches.reduce((s, b) => s + b.weightKg, 0);
-  const safeWeight  = isNaN(weight) || weight < 0 ? 0 : weight;
-  const estimatedValue = (safeWeight * (grade === 'A' ? 450 : 380)).toLocaleString('en-IN');
-  const latestBatch = batches[0];
+  const openModal  = () => { setSubmitError(null); setFormErrors({}); setIsRecordModalOpen(true); void loadWarehouses(); };
+  const closeModal = () => { setIsRecordModalOpen(false); setSubmitError(null); setFormErrors({}); setSelectedImages([]); setImagePreviews([]); setSelectedWarehouseId(''); setImageGeo({ latitude: null, longitude: null }); };
 
-  const statusTagType = (status: string) => {
-    if (status === 'certified')   return 'green';
-    if (status === 'recalled')    return 'red';
-    if (status === 'in_testing')  return 'purple';
-    if (status === 'in_warehouse')return 'blue';
-    return 'gray';
+  const handleViewJourney = (batchId?: string) => {
+    if (!batchId) return;
+    setNavigatingBatchId(batchId);
+    router.push(`/${locale}/trace/${batchId}`);
   };
 
-  // ── Header ────────────────────────────────────────────────────────────────
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    setSelectedImages(files);
+    setFormErrors((prev) => ({ ...prev, images: '' }));
+    if (files.length > 0 && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setImageGeo({
+            latitude: Number(position.coords.latitude.toFixed(6)),
+            longitude: Number(position.coords.longitude.toFixed(6)),
+          });
+        },
+        () => {
+          setImageGeo({ latitude: null, longitude: null });
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+      );
+    } else {
+      setImageGeo({ latitude: null, longitude: null });
+    }
+
+    const previews = files.map((file) => URL.createObjectURL(file));
+    setImagePreviews(previews);
+  };
+
+  useEffect(() => {
+    return () => {
+      imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [imagePreviews]);
+
+  /* ── Derived values ───────────────────────────────────────────────── */
+  const totalWeight    = batches.reduce((s, b) => s + b.weightKg, 0);
+  const safeWeight     = isNaN(weight) || weight < 0 ? 0 : weight;
+  const estimatedValue = (safeWeight * (grade === 'A' ? 450 : 380)).toLocaleString('en-IN');
+  const latestBatch    = batches[0];
+  const certifiedCount = batches.filter(b => b.status === 'certified').length;
+  const selectedWarehouse = warehouses.find((w) => w.id === selectedWarehouseId) ?? null;
+
+  /* ── Page header ──────────────────────────────────────────────────── */
+  const displayName = profile.name || currentUser.name || '…';
   const pageHeader = (
-    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-spacing-lg py-spacing-xl animate-fade-in">
-      <div>
-        <h1 className="text-h1">{t('portalTitle')}</h1>
-        <p className="text-body mt-spacing-xs max-w-lg">{t('portalSubtitle')}</p>
-      </div>
-      <div className="shrink-0">
-        <Button renderIcon={Add} size="md" onClick={() => setIsRecordModalOpen(true)}>
-          {t('record_harvest')}
-        </Button>
+    <div className="fd-govid" role="region" aria-label="Farmer portal header">
+      <div className="fd-govid-body">
+        {/* Left — title + identity fields */}
+        <div className="fd-govid-identity">
+          <div className="fd-govid-info">
+            <p className="fd-govid-role-tag">Persona: Farmer / Harvester</p>
+            <h1 className="fd-govid-name">{displayName}&apos;s Harvest Portal</h1>
+          </div>
+          <div className="fd-govid-fields">
+            <div className="fd-govid-field">
+              <span className="fd-govid-field-label">Aadhaar:</span>
+              <span className="fd-govid-field-val fd-govid-field-val--mono">
+                {profileLoading
+                  ? 'Loading…'
+                  : profile.aadhaarMasked
+                    ? profile.aadhaarMasked
+                    : <span className="fd-govid-field-val--unverified">Not linked</span>
+                }
+                {profile.aadhaarVerified && (
+                  <span className="fd-govid-verified-badge" aria-label="Aadhaar verified">
+                    <Checkmark size={10} aria-hidden="true" /> Verified
+                  </span>
+                )}
+              </span>
+            </div>
+            {profile.pmKisanId && (
+              <div className="fd-govid-field">
+                <span className="fd-govid-field-label">PM-KISAN:</span>
+                <span className="fd-govid-field-val fd-govid-field-val--mono">{profile.pmKisanId}</span>
+              </div>
+            )}
+            <span className={`fd-govid-kyc-badge ${currentUser.kycCompleted ? 'fd-govid-kyc-badge--ok' : 'fd-govid-kyc-badge--pending'}`}>
+              KYC {currentUser.kycCompleted ? 'Verified' : 'Pending'}
+            </span>
+          </div>
+        </div>
+
+        {/* Right — CTA */}
+        <div className="fd-govid-stats">
+          <Button renderIcon={Add} size="md" onClick={openModal}>
+            {t('record_harvest')}
+          </Button>
+        </div>
       </div>
     </div>
   );
 
+  /* ════════════════════════════════════════════════════════════════════ */
   return (
     <UnifiedDashboardLayout header={pageHeader}>
       {isOnboardingOpen && (
-        <SimplifiedFarmerOnboarding
-          farmerName={currentUser.name}
-          onCompleteAction={completeOnboarding}
-        />
+        <SimplifiedFarmerOnboarding farmerName={currentUser.name} onCompleteAction={completeOnboarding} />
       )}
       <GuidedTour steps={tourSteps} isOpen={isTourOpen} onClose={closeTour} onComplete={completeTour} />
 
@@ -234,18 +342,25 @@ export default function FarmerDashboard({
         />
       ))}
 
-      {/* Harvest Record Modal */}
+      {/* ── Record Harvest Modal ─────────────────────────────────────── */}
       <Modal
         open={isRecordModalOpen}
         modalHeading={t('record_harvest')}
         primaryButtonText={isSubmitting ? t('recording') : t('submit_ledger')}
         secondaryButtonText={t('cancel')}
-        onRequestClose={() => { setIsRecordModalOpen(false); setSubmitError(null); setFormErrors({}); }}
+        onRequestClose={closeModal}
         onRequestSubmit={handleRecordSubmit}
-        primaryButtonDisabled={isSubmitting}
+        primaryButtonDisabled={
+          isSubmitting
+          || warehousesLoading
+          || warehouses.length === 0
+          || !selectedWarehouseId
+          || hasInvalidImageSelection(selectedImages)
+        }
+        size="sm"
       >
-        <Stack gap={7}>
-          <p className="text-body mb-spacing-md">{t('harvest_details')}</p>
+        <Stack gap={6}>
+          <p className="fd-modal-desc">{t('harvest_details')}</p>
 
           {submitError && (
             <InlineNotification
@@ -257,11 +372,20 @@ export default function FarmerDashboard({
             />
           )}
 
-          <div className={`flex items-center gap-2 p-spacing-sm rounded text-xs font-bold border mono-data ${gpsError || formErrors.gps ? 'bg-error/5 text-error border-error/15' : 'bg-primary/5 text-primary border-primary/15'}`}>
-            <Location size={16} />
-            {gpsError ? gpsError : gpsReady ? t('gpsLock', { coords: gpsCoords }) : t('acquiringGPS')}
+          {/* GPS status */}
+          <div className={`fd-gps-status ${gpsError || formErrors.gps ? 'fd-gps-status--error' : gpsReady ? 'fd-gps-status--ok' : 'fd-gps-status--waiting'}`}>
+            <Location size={16} aria-hidden="true" />
+            <span>
+              {gpsError
+                ? gpsError
+                : gpsReady
+                  ? t('gpsLock', { coords: gpsCoords })
+                  : t('acquiringGPS')}
+            </span>
+            {gpsReady && !gpsError && <Checkmark size={16} className="fd-gps-check" aria-label="GPS lock acquired" />}
+            {(gpsError || formErrors.gps) && <Warning size={16} aria-label="GPS error" />}
           </div>
-          {formErrors.gps && <p className="text-error text-xs mt-1">{formErrors.gps}</p>}
+          {formErrors.gps && <p className="fd-field-error">{formErrors.gps}</p>}
 
           <TextInput
             id="origin-field"
@@ -273,181 +397,366 @@ export default function FarmerDashboard({
             invalidText={formErrors.floraType}
           />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-spacing-md">
+          <Select
+            id="warehouse-select"
+            labelText="Select Warehouse"
+            value={selectedWarehouseId}
+            onChange={(e) => setSelectedWarehouseId(e.target.value)}
+            invalid={!!formErrors.warehouse}
+            invalidText={formErrors.warehouse}
+            disabled={warehousesLoading || warehouses.length === 0}
+          >
+            <SelectItem value="" text={warehousesLoading ? 'Loading warehouses...' : 'Select Warehouse'} />
+            {warehouses.map((w) => (
+              <SelectItem
+                key={w.id}
+                value={w.id}
+                text={
+                  w.totalCapacity != null
+                    ? `${w.name} • ${w.remainingCapacity ?? 0}/${w.totalCapacity} kg free${w.location ? ` • ${w.location}` : ''}`
+                    : `${w.name}${w.location ? ` • ${w.location}` : ''} • Capacity NA`
+                }
+              />
+            ))}
+          </Select>
+          {selectedWarehouse && (
+            <div className="text-xs text-slate-600">
+              <p><strong>Warehouse:</strong> {selectedWarehouse.name}</p>
+              {selectedWarehouse.location && <p><strong>Location:</strong> {selectedWarehouse.location}</p>}
+              {selectedWarehouse.totalCapacity != null ? (
+                <p>
+                  <strong>Capacity:</strong> {selectedWarehouse.remainingCapacity ?? 0} kg remaining of {selectedWarehouse.totalCapacity} kg
+                </p>
+              ) : (
+                <p><strong>Capacity:</strong> Not available</p>
+              )}
+            </div>
+          )}
+
+          {warehousesError && (
+            <InlineNotification kind="error" title="Warehouse load failed" subtitle={warehousesError} lowContrast />
+          )}
+          {!warehousesLoading && warehouses.length === 0 && !warehousesError && (
+            <InlineNotification kind="warning" title="No warehouses available" subtitle="No warehouses available" lowContrast hideCloseButton />
+          )}
+
+          <div>
+            <label htmlFor="batch-images" className="cds--label">Batch Images (optional)</label>
+            <input
+              id="batch-images"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              onChange={handleImageChange}
+              className="mt-2 block w-full text-sm"
+            />
+            <p className="text-xs text-slate-500 mt-1">Allowed: jpeg/png/webp, max 5MB each</p>
+            <p className="text-xs text-slate-500 mt-1">
+              Image GPS tag: {imageGeo.latitude == null || imageGeo.longitude == null ? 'Not captured' : `${imageGeo.latitude}, ${imageGeo.longitude}`}
+            </p>
+            {formErrors.images && <p className="fd-field-error">{formErrors.images}</p>}
+
+            {imagePreviews.length > 0 && (
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {imagePreviews.map((preview, index) => (
+                  <img
+                    key={`${preview}-${index}`}
+                    src={preview}
+                    alt={`Selected upload ${index + 1}`}
+                    className="w-full h-20 object-cover rounded border border-slate-200"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="fd-form-row">
             <NumberInput
               id="weight-field"
               label={t('weight_kg')}
-              min={0}
-              max={5000}
+              min={0} max={5000}
               value={weight}
-              onChange={(_e, state: { value: string | number }) => {
-                setWeight(typeof state?.value === 'number' ? state.value : Number(state?.value ?? 0));
-              }}
+              onChange={(_e, state: { value: string | number }) =>
+                setWeight(typeof state?.value === 'number' ? state.value : Number(state?.value ?? 0))
+              }
               invalid={!!formErrors.weight}
               invalidText={formErrors.weight}
             />
             <NumberInput
               id="moisture-content"
               label={t('moisture_content')}
-              min={10}
-              max={25}
+              min={10} max={25}
               value={moistureValue}
-              onChange={(_e, state: { value: string | number }) => {
-                setMoistureValue(typeof state?.value === 'number' ? state.value : Number(state?.value ?? 18));
-              }}
+              onChange={(_e, state: { value: string | number }) =>
+                setMoistureValue(typeof state?.value === 'number' ? state.value : Number(state?.value ?? 18))
+              }
               invalid={!!formErrors.moisture}
               invalidText={formErrors.moisture}
             />
           </div>
+
+          {/* Grade selector */}
+          <div className="fd-grade-selector">
+            <span className="fd-grade-label">Honey Grade</span>
+            <div className="fd-grade-options" role="group" aria-label="Select honey grade">
+              <button
+                type="button"
+                className={`fd-grade-btn ${grade === 'A' ? 'fd-grade-btn--active' : ''}`}
+                aria-pressed={grade === 'A'}
+                onClick={() => setGrade('A')}
+              >
+                <span className="fd-grade-letter">A</span>
+                <span className="fd-grade-desc">Premium · ₹450/kg</span>
+              </button>
+              <button
+                type="button"
+                className={`fd-grade-btn ${grade === 'B' ? 'fd-grade-btn--active' : ''}`}
+                aria-pressed={grade === 'B'}
+                onClick={() => setGrade('B')}
+              >
+                <span className="fd-grade-letter">B</span>
+                <span className="fd-grade-desc">Standard · ₹380/kg</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Estimated value preview */}
+          {weight > 0 && (
+            <div className="fd-value-preview">
+              <span className="fd-value-preview-label">Estimated Value</span>
+              <span className="fd-value-preview-amount">₹{estimatedValue}</span>
+              <span className="fd-value-preview-note">at MSP for Grade {grade}</span>
+            </div>
+          )}
         </Stack>
       </Modal>
 
-      {/* ── QR Code Modal (auto-opens after batch registration) ── */}
+      {/* ── QR Code Modal ───────────────────────────────────────────── */}
       <Modal
         open={!!createdBatchId}
         modalHeading="Batch Registered — Product QR Code"
         passiveModal
         onRequestClose={() => setCreatedBatchId(null)}
       >
-        <div className="flex flex-col items-center gap-4 py-4 text-center">
-          <p className="text-sm text-gray-600 max-w-xs">
-            Your batch has been recorded on the blockchain.
-            Print or download this QR code and attach it to the product jar —
-            consumers can scan it with any phone camera to see the full journey.
+        <div className="fd-qr-modal">
+          <p className="fd-qr-modal-desc">
+            Your batch has been recorded on the blockchain. Print or download this QR
+            code and attach it to the product jar — consumers can scan it with any
+            phone camera to see the full traceability journey.
           </p>
           {createdBatchId && <QRCodeGenerator batchId={createdBatchId} />}
         </div>
       </Modal>
 
-      {/* Stats + Map Stamp */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-spacing-lg">
-        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-spacing-lg">
-          <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
-            <div className="absolute right-[-20px] top-[-20px] opacity-10 group-hover:rotate-12 transition-transform duration-700">
-              <Sun size={120} />
-            </div>
-            <p className="text-caption mb-spacing-md">{t('weather_title')}</p>
-            <h3 className="text-h2">
-              {weatherLoading ? '…' : weatherTemp == null || weatherHumidity == null ? '— / —' : `${weatherTemp.toFixed(1)}°C / ${weatherHumidity.toFixed(0)}% RH`}
-            </h3>
-            <div className="mt-spacing-lg">
-              <Tag type="green" className="!m-0 px-3 font-bold uppercase tracking-widest text-[10px]">{t('weather_sunny')}</Tag>
-              <p className="text-[10px] font-bold text-success uppercase mt-2">{t('weather_ideal')}</p>
-            </div>
-          </Tile>
+      {/* ── KPI Row + Side Panel ────────────────────────────────────── */}
+      <section className="fd-kpi-grid" aria-label="Key performance indicators">
 
-          <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
-            <div className="absolute right-[-20px] top-[-20px] opacity-10 group-hover:scale-110 transition-transform duration-700 text-primary">
-              <Growth size={120} />
+        {/* KPI Card — Weather */}
+        <div className="fd-kpi-card fd-kpi-card--weather">
+          <div className="fd-kpi-card-top">
+            <div className="fd-kpi-card-icon" aria-hidden="true"><Sun size={24} /></div>
+            <p className="fd-kpi-label">{t('weather_title')}</p>
+            {weatherLoading ? (
+              <p className="fd-kpi-loading">Fetching weather…</p>
+            ) : weatherTemp != null ? (
+              <p className="fd-kpi-value">{weatherTemp.toFixed(1)}°C</p>
+            ) : (
+              <p className="fd-kpi-value fd-kpi-value--muted">—</p>
+            )}
+          </div>
+          <div className="fd-kpi-card-body">
+            {weatherHumidity != null && (
+              <p className="fd-kpi-sub">{weatherHumidity.toFixed(0)}% Relative Humidity</p>
+            )}
+            <span className="fd-kpi-badge fd-kpi-badge--amber">{t('weather_sunny')}</span>
+            <span className="fd-kpi-badge fd-kpi-badge--green" style={{ marginTop: '0.25rem' }}>{t('weather_ideal')}</span>
+          </div>
+        </div>
+
+        {/* KPI Card — MSP Calculator */}
+        <div className="fd-kpi-card fd-kpi-card--msp">
+          <div className="fd-kpi-card-top">
+            <div className="fd-kpi-card-icon" aria-hidden="true"><Growth size={24} /></div>
+            <p className="fd-kpi-label">{t('msp_calculator')}</p>
+            <p className="fd-kpi-value fd-kpi-value--currency">₹{estimatedValue}</p>
+          </div>
+          <div className="fd-kpi-card-body">
+            <p className="fd-kpi-sub">{grade === 'A' ? t('grade_a') : t('grade_b')}</p>
+            <div className="fd-grade-toggle" role="group" aria-label="Grade for MSP calculation">
+              <button
+                type="button"
+                className={`fd-grade-toggle-btn ${grade === 'A' ? 'active' : ''}`}
+                aria-pressed={grade === 'A'}
+                onClick={() => setGrade('A')}
+              >
+                Grade A
+              </button>
+              <button
+                type="button"
+                className={`fd-grade-toggle-btn ${grade === 'B' ? 'active' : ''}`}
+                aria-pressed={grade === 'B'}
+                onClick={() => setGrade('B')}
+              >
+                Grade B
+              </button>
             </div>
-            <p className="text-caption mb-spacing-md">{t('msp_calculator')}</p>
-            <div className="flex justify-between items-center mb-spacing-md">
-              <span className="text-[10px] font-bold uppercase text-slate-400">{t('selectGrade')}</span>
-              <div className="flex gap-2 p-1 bg-slate-100 rounded-lg">
-                <button type="button" aria-pressed={grade === 'A'} onClick={() => setGrade('A')} className={`px-3 py-1 text-[10px] rounded-md font-bold transition-all ${grade === 'A' ? 'bg-primary text-white shadow-md scale-105' : 'text-slate-500 hover:bg-white'}`}>A</button>
-                <button type="button" aria-pressed={grade === 'B'} onClick={() => setGrade('B')} className={`px-3 py-1 text-[10px] rounded-md font-bold transition-all ${grade === 'B' ? 'bg-primary text-white shadow-md scale-105' : 'text-slate-500 hover:bg-white'}`}>B</button>
+          </div>
+        </div>
+
+        {/* KPI Card — Harvests */}
+        <div className="fd-kpi-card fd-kpi-card--harvests">
+          <div className="fd-kpi-card-top">
+            <div className="fd-kpi-card-icon" aria-hidden="true"><Chemistry size={24} /></div>
+            <p className="fd-kpi-label">{t('total_harvests')}</p>
+            <p className="fd-kpi-value">{loading ? '—' : batches.length}</p>
+          </div>
+          <div className="fd-kpi-card-body">
+            <p className="fd-kpi-sub">{certifiedCount} certified batches</p>
+            <div className="fd-kpi-divider" />
+            <div className="fd-kpi-row">
+              <span className="fd-kpi-meta-label">{t('verified_weight')}</span>
+              <span className="fd-kpi-meta-value">{loading ? '—' : `${(totalWeight / 1000).toFixed(2)} ${t('tons')}`}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Side: Location stamp + Latest batch */}
+        <div className="fd-kpi-side">
+          {/* Geo stamp */}
+          <div className="fd-geo-card">
+            <div className="fd-geo-header">
+              <Location size={16} aria-hidden="true" />
+              <span className="fd-geo-location">Dindori Forest, MP</span>
+              <span className={`fd-geo-dot ${gpsReady ? 'fd-geo-dot--live' : 'fd-geo-dot--wait'}`} aria-label={gpsReady ? 'GPS active' : 'Acquiring GPS'} />
+            </div>
+            <div className="fd-geo-coords">
+              <div>
+                <span className="fd-geo-meta">Coordinates</span>
+                <span className="fd-geo-val">{gpsLat}° N, {gpsLng}° E</span>
+              </div>
+              <div className="fd-geo-ts">
+                <Time size={12} aria-hidden="true" />
+                <span className="fd-geo-val" suppressHydrationWarning>
+                  {new Date().toISOString().slice(11, 19)} <strong>UTC</strong>
+                </span>
               </div>
             </div>
-            <h3 className="text-h2 font-mono text-gradient">₹{estimatedValue}</h3>
-            <p className="text-[10px] text-slate-500 font-bold uppercase mt-2 tracking-widest">({grade === 'A' ? t('grade_a') : t('grade_b')})</p>
-          </Tile>
+            <p className="fd-geo-footer">Geo-secured &amp; blockchain-stamped</p>
+          </div>
 
-          <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden">
-            <p className="text-caption mb-spacing-md">{t('total_harvests')}</p>
-            <h3 className="text-h1 text-gradient">{loading ? '—' : batches.length}</h3>
-            <div className="mt-spacing-lg p-3 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
-              <span className="text-caption !text-[10px] !text-slate-500">{t('verified_weight')}</span>
-              <span className="text-h3 mono-data">{loading ? '—' : `${(totalWeight / 1000).toFixed(1)} ${t('tons')}`}</span>
+          {/* Latest batch QR reference */}
+          {latestBatch && (
+            <div className="fd-latest-batch">
+              <div className="fd-latest-batch-icon" aria-hidden="true">
+                <QrCode size={32} />
+              </div>
+              <div className="fd-latest-batch-info">
+                <div className="fd-latest-batch-header">
+                  <span className="fd-latest-batch-label">{t('prior_step_name')}</span>
+                  <span className="fd-latest-batch-verified">
+                    <Blockchain size={12} aria-hidden="true" />
+                    Verified
+                  </span>
+                </div>
+                <p className="fd-latest-batch-id">{latestBatch.batchId || latestBatch.id}</p>
+                <p className="fd-latest-batch-desc">{t('prior_step_desc')}</p>
+              </div>
             </div>
-          </Tile>
+          )}
+        </div>
+      </section>
+
+      {/* ── Harvest Ledger Table ─────────────────────────────────────── */}
+      <section className="fd-table-section" aria-labelledby="ledger-title">
+        <div className="fd-table-header">
+          <div>
+            <h2 id="ledger-title" className="fd-table-title">{t('recent_ledger')}</h2>
+            <p className="fd-table-desc">{t('recentLedgerDesc')}</p>
+          </div>
+          <span className="fd-table-count" aria-label={`${batches.length} records`}>
+            {batches.length} {batches.length === 1 ? 'record' : 'records'}
+          </span>
         </div>
 
-        <div className="flex flex-col gap-spacing-md">
-          <BlockchainMapStamp
-            locationName="Dindori Forest, MP"
-            latitude={`${gpsLat}° N`}
-            longitude={`${gpsLng}° E`}
-            utcTime={new Date().toISOString().slice(11, 19)}
-          />
-          <PriorStepQR
-            stepName={t('prior_step_name')}
-            batchId={latestBatch?.batchId || latestBatch?.id || '--'}
-            details={t('prior_step_desc')}
-          />
-        </div>
-      </div>
-
-      {/* Harvest Table */}
-      <div className="glass-panel rounded-2xl shadow-xl elevation-premium overflow-hidden">
         {fetchError && (
-          <div className="p-4">
+          <div className="fd-table-error">
             <InlineNotification kind="error" title="Could not load batches." subtitle={fetchError} hideCloseButton lowContrast />
           </div>
         )}
+
         {loading ? (
-          <DataTableSkeleton columnCount={4} rowCount={3} className="p-spacing-lg" />
+          <DataTableSkeleton columnCount={5} rowCount={4} />
+        ) : batches.length === 0 ? (
+          <div className="fd-empty-state">
+            <div className="fd-empty-icon" aria-hidden="true"><DataTableIcon size={40} /></div>
+            <p className="fd-empty-title">No harvest records yet</p>
+            <p className="fd-empty-desc">Submit your first harvest using the &quot;Record New Harvest&quot; button above.</p>
+            <Button size="sm" renderIcon={Add} onClick={openModal}>Record Your First Harvest</Button>
+          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <TableContainer
-              title={<span className="text-h2">{t('recent_ledger')}</span>}
-              description={t('recentLedgerDesc')}
-              className="!border-none !p-spacing-lg"
-            >
-              <Table>
-                <TableHead>
-                  <TableRow className="!border-b-2 !border-slate-100">
-                    <TableHeader className="!bg-transparent !text-caption !text-[10px]">{t('batchId')}</TableHeader>
-                    <TableHeader className="!bg-transparent !text-caption !text-[10px]">{t('harvestDate')}</TableHeader>
-                    <TableHeader className="!bg-transparent !text-caption !text-[10px]">{t('weight_kg')}</TableHeader>
-                    <TableHeader className="!bg-transparent !text-caption !text-[10px]">{t('status')}</TableHeader>
-                    <TableHeader className="!bg-transparent !text-caption !text-[10px]">On-Chain TX</TableHeader>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {batches.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5}>
-                        <EmptyState title="No harvest records yet" description="Submit your first harvest using the 'Record New Harvest' button above." />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {batches.map((batch) => (
-                    <TableRow key={batch.id} className="hover:!bg-slate-50 transition-colors border-none group">
-                      <TableCell className="mono-data text-primary font-bold group-hover:pl-4 transition-all">{batch.batchId}</TableCell>
-                      <TableCell className="text-slate-500 font-medium">{batch.harvestDate}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 font-bold text-slate-900 font-mono">
-                          <Chemistry size={16} className="text-primary" />
+          <div className="fd-table-scroll">
+            <table className="fd-table">
+              <thead>
+                <tr>
+                  <th scope="col">{t('batchId')}</th>
+                  <th scope="col">{t('harvestDate')}</th>
+                  <th scope="col">{t('weight_kg')}</th>
+                  <th scope="col">{t('status')}</th>
+                  <th scope="col">On-Chain TX</th>
+                  <th scope="col">Journey</th>
+                </tr>
+              </thead>
+              <tbody>
+                {batches.map((batch) => {
+                  const statusMeta = getStatus(batch.status);
+                  const rowBatchId = batch.batchId || batch.id || '';
+                  return (
+                    <tr key={batch.id}>
+                      <td>
+                        <span className="fd-batch-id">{batch.batchId}</span>
+                      </td>
+                      <td>
+                        <span className="fd-date">{batch.harvestDate}</span>
+                      </td>
+                      <td>
+                        <span className="fd-weight">
+                          <Chemistry size={14} aria-hidden="true" />
                           {batch.weightKg.toLocaleString('en-IN')} kg
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Tag
-                          type={statusTagType(batch.status)}
-                          className="!rounded-md !px-3 font-bold uppercase tracking-widest text-[10px] border-none"
-                        >
-                          {batch.status.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td>
+                        <Tag type={statusMeta.type} className="fd-status-tag">
+                          {statusMeta.label}
                         </Tag>
-                      </TableCell>
-                      <TableCell>
+                      </td>
+                      <td>
                         {batch.onChainTxHash ? (
-                          <div className="flex items-center gap-1">
-                            <span className="font-mono text-[11px] text-teal-700 break-all max-w-[180px]">{batch.onChainTxHash}</span>
+                          <span className="fd-tx-hash">
+                            <span className="fd-tx-hash-text">{batch.onChainTxHash}</span>
                             <CopyableValue value={batch.onChainTxHash} label="Copy" className="min-h-0 h-6 px-1" />
-                          </div>
+                          </span>
                         ) : (
-                          <span className="text-[10px] text-slate-400">Pending</span>
+                          <span className="fd-tx-pending">Pending</span>
                         )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                      </td>
+                      <td>
+                        <Button
+                          size="sm"
+                          kind="secondary"
+                          disabled={!rowBatchId || navigatingBatchId === rowBatchId}
+                          onClick={() => handleViewJourney(rowBatchId)}
+                        >
+                          {navigatingBatchId === rowBatchId ? 'Loading...' : 'View Journey'}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
-      </div>
+      </section>
     </UnifiedDashboardLayout>
   );
 }
-

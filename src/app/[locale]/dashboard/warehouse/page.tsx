@@ -3,54 +3,51 @@
 import React from 'react';
 import { useTranslations } from 'next-intl';
 import {
-  Tile,
   Button,
-  TableContainer,
-  Table,
-  TableHead,
-  TableRow,
-  TableHeader,
-  TableBody,
-  TableCell,
-  Tag,
-  Stack,
   Modal,
   TextInput,
+  Stack,
   DataTableSkeleton,
   InlineNotification,
+  Tag,
 } from '@carbon/react';
-import { InventoryManagement, Temperature, Humidity, Delivery, Add, Connect } from '@carbon/icons-react';
+import { InventoryManagement, Temperature, Humidity, Delivery, Add, Connect, Location, Time, QrCode, Blockchain } from '@carbon/icons-react';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import GuidedTour from '@/components/Onboarding/GuidedTour';
 import IdentityVerificationModal from '@/components/Onboarding/IdentityVerificationModal';
-import PriorStepQR from '@/components/Traceability/PriorStepQR';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
-import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
 import { useBatches } from '@/hooks/useBatches';
 import { batchesApi, ApiError } from '@/lib/api';
 import CopyableValue from '@/components/CopyableValue';
 
+const STATUS_META: Record<string, { label: string; type: 'green' | 'blue' | 'purple' | 'red' | 'gray' }> = {
+  in_warehouse: { label: 'In Warehouse', type: 'green' },
+  dispatched:   { label: 'Dispatched',   type: 'blue'  },
+  certified:    { label: 'Certified',    type: 'green' },
+  recalled:     { label: 'Recalled',     type: 'red'   },
+  in_testing:   { label: 'In Testing',   type: 'purple'},
+};
+const getStatus = (s: string) => STATUS_META[s] ?? { label: s.replace(/_/g, ' '), type: 'gray' as const };
+
 export default function WarehouseDashboard() {
-  const t = useTranslations('Onboarding.warehouse');
+  const t          = useTranslations('Onboarding.warehouse');
   const tDashboard = useTranslations('Dashboard.warehouse');
   const { isTourOpen, isKYCOpen, completeKYC, completeTour, closeTour } = useOnboarding({ role: 'warehouse', hasKYC: true });
 
   const { batches, loading, error, refresh } = useBatches();
 
-  // Modal state — Record Incoming
-  const [isIncomingModalOpen, setIsIncomingModalOpen] = React.useState(false);
-  const [incomingBatchId, setIncomingBatchId] = React.useState('');
-  const [incomingError, setIncomingError] = React.useState<string | null>(null);
-  const [incomingLoading, setIncomingLoading] = React.useState(false);
+  const [isIncomingModalOpen,  setIsIncomingModalOpen]  = React.useState(false);
+  const [incomingBatchId,      setIncomingBatchId]      = React.useState('');
+  const [incomingError,        setIncomingError]        = React.useState<string | null>(null);
+  const [incomingLoading,      setIncomingLoading]      = React.useState(false);
 
-  // Modal state — Generate Pass (dispatch)
-  const [isDispatchModalOpen, setIsDispatchModalOpen] = React.useState(false);
-  const [dispatchBatchId, setDispatchBatchId] = React.useState('');
-  const [dispatchDestination, setDispatchDestination] = React.useState('');
-  const [dispatchInvoiceNo, setDispatchInvoiceNo] = React.useState('');
-  const [dispatchError, setDispatchError] = React.useState<string | null>(null);
-  const [dispatchLoading, setDispatchLoading] = React.useState(false);
-  const [mapUtcTime, setMapUtcTime] = React.useState('--:--:--');
+  const [isDispatchModalOpen,  setIsDispatchModalOpen]  = React.useState(false);
+  const [dispatchBatchId,      setDispatchBatchId]      = React.useState('');
+  const [dispatchDestination,  setDispatchDestination]  = React.useState('');
+  const [dispatchInvoiceNo,    setDispatchInvoiceNo]    = React.useState('');
+  const [dispatchError,        setDispatchError]        = React.useState<string | null>(null);
+  const [dispatchLoading,      setDispatchLoading]      = React.useState(false);
+  const [mapUtcTime,           setMapUtcTime]           = React.useState('--:--:--');
 
   React.useEffect(() => {
     setMapUtcTime(new Date().toISOString().substring(11, 19));
@@ -62,163 +59,86 @@ export default function WarehouseDashboard() {
     { label: t('step3_title'), title: t('step3_title'), description: t('step3_desc') },
   ];
 
-  // Map batches to table rows
-  const rows = batches.map((b) => ({
-    id: b.id,
-    batchId: b.batchId || b.id,
-    batch: `${b.floraType} — ${b.batchId || b.id}`,
-    status: b.status,
-    arrival: b.createdAt ? b.createdAt.slice(0, 10) : '--',
-    txHash: b.onChainTxHash || '',
-  }));
-
-  // Derive stock level KPI: sum of weightKg for in_warehouse batches
-  const stockKg = batches
-    .filter((b) => b.status === 'in_warehouse')
-    .reduce((sum, b) => sum + b.weightKg, 0);
-
-  const inWarehouseCount = batches.filter((b) => b.status === 'in_warehouse').length;
-  const dispatchedKg = batches
-    .filter((b) => b.status === 'dispatched')
-    .reduce((sum, b) => sum + b.weightKg, 0);
-  const dispatchedCount = batches.filter((b) => b.status === 'dispatched').length;
-  const avgMoisture = inWarehouseCount > 0
-    ? batches
-      .filter((b) => b.status === 'in_warehouse')
-      .reduce((sum, b) => sum + b.moisturePct, 0) / inWarehouseCount
+  /* ── Derived values ──────────────────────────────────────────────────── */
+  const stockKg          = batches.filter(b => b.status === 'in_warehouse').reduce((s, b) => s + b.weightKg, 0);
+  const inWarehouseCount = batches.filter(b => b.status === 'in_warehouse').length;
+  const dispatchedKg     = batches.filter(b => b.status === 'dispatched').reduce((s, b) => s + b.weightKg, 0);
+  const dispatchedCount  = batches.filter(b => b.status === 'dispatched').length;
+  const avgMoisture      = inWarehouseCount > 0
+    ? batches.filter(b => b.status === 'in_warehouse').reduce((s, b) => s + b.moisturePct, 0) / inWarehouseCount
     : null;
-  const latestBatch = batches[0];
+  const avgTemp          = avgMoisture != null ? Math.max(18, Math.min(32, 20 + (avgMoisture - 17) * 0.8)) : null;
+  const humidity         = avgMoisture != null ? Math.max(35, Math.min(75, 45 + avgMoisture)) : null;
+  const latestBatch      = batches[0];
+
   const occupancySet = React.useMemo(() => {
     const set = new Set<number>();
-    for (const b of batches.filter((item) => item.status === 'in_warehouse')) {
-      const key = b.batchId || b.id;
-      const idx = key.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % 16;
+    for (const b of batches.filter(item => item.status === 'in_warehouse')) {
+      const idx = (b.batchId || b.id).split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % 16;
       set.add(idx);
       if (set.size >= 16) break;
     }
     return set;
   }, [batches]);
 
-  const headers = [
-    { key: 'batch', header: tDashboard('batch_name') },
-    { key: 'status', header: tDashboard('status') },
-    { key: 'arrival', header: tDashboard('last_update') },
-    { key: 'txHash', header: 'On-Chain TX' },
-  ];
-
+  /* ── Handlers ────────────────────────────────────────────────────────── */
   const handleRecordIncoming = async () => {
-    const normalizedBatchId = incomingBatchId.trim().toUpperCase();
-    if (!normalizedBatchId) {
-      setIncomingError('Batch ID is required');
-      return;
-    }
-    let targetBatch = batches.find((b) => (b.batchId || b.id) === normalizedBatchId);
-    if (!targetBatch) {
-      try {
-        targetBatch = await batchesApi.get(normalizedBatchId);
-      } catch {
-        setIncomingError('Batch not found.');
-        return;
-      }
-    }
-    if (targetBatch.status !== 'pending') {
-      setIncomingError('Only newly created (pending) batches can be recorded as incoming.');
-      return;
-    }
-    setIncomingLoading(true);
-    setIncomingError(null);
+    const id = incomingBatchId.trim().toUpperCase();
+    if (!id) { setIncomingError('Batch ID is required'); return; }
+    let target = batches.find(b => (b.batchId || b.id) === id);
+    if (!target) { try { target = await batchesApi.get(id); } catch { setIncomingError('Batch not found.'); return; } }
+    if (target.status !== 'pending') { setIncomingError('Only pending batches can be recorded as incoming.'); return; }
+    setIncomingLoading(true); setIncomingError(null);
     try {
-      await batchesApi.patch(normalizedBatchId, {
-        status: 'in_warehouse',
-        warehouseReceivedAt: new Date().toISOString(),
-      });
-      setIsIncomingModalOpen(false);
-      setIncomingBatchId('');
-      refresh();
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setIncomingError(err.message);
-      } else {
-        setIncomingError('Failed to update batch');
-      }
-    } finally {
-      setIncomingLoading(false);
-    }
+      await batchesApi.patch(id, { status: 'in_warehouse', warehouseReceivedAt: new Date().toISOString() });
+      setIsIncomingModalOpen(false); setIncomingBatchId(''); refresh();
+    } catch (err) { setIncomingError(err instanceof ApiError ? err.message : 'Failed to update batch'); }
+    finally { setIncomingLoading(false); }
   };
 
   const handleGeneratePass = async () => {
-    const normalizedBatchId = dispatchBatchId.trim().toUpperCase();
-    if (!normalizedBatchId) {
-      setDispatchError('Batch ID is required');
-      return;
-    }
-    if (!dispatchDestination.trim()) {
-      setDispatchError('Destination enterprise is required');
-      return;
-    }
-    if (!dispatchInvoiceNo.trim()) {
-      setDispatchError('Invoice number is required');
-      return;
-    }
-    let targetBatch = batches.find((b) => (b.batchId || b.id) === normalizedBatchId);
-    if (!targetBatch) {
-      try {
-        targetBatch = await batchesApi.get(normalizedBatchId);
-      } catch {
-        setDispatchError('Batch not found.');
-        return;
-      }
-    }
-    if (targetBatch.status !== 'certified') {
-      setDispatchError('Only officer-approved (certified) batches can be dispatched.');
-      return;
-    }
-    setDispatchLoading(true);
-    setDispatchError(null);
+    const id = dispatchBatchId.trim().toUpperCase();
+    if (!id)                        { setDispatchError('Batch ID is required'); return; }
+    if (!dispatchDestination.trim()) { setDispatchError('Destination enterprise is required'); return; }
+    if (!dispatchInvoiceNo.trim())   { setDispatchError('Invoice number is required'); return; }
+    let target = batches.find(b => (b.batchId || b.id) === id);
+    if (!target) { try { target = await batchesApi.get(id); } catch { setDispatchError('Batch not found.'); return; } }
+    if (target.status !== 'certified') { setDispatchError('Only certified batches can be dispatched.'); return; }
+    setDispatchLoading(true); setDispatchError(null);
     try {
-      await batchesApi.patch(normalizedBatchId, {
-        status: 'dispatched',
-        dispatchedAt: new Date().toISOString(),
-        destinationEnterprise: dispatchDestination.trim(),
-        invoiceNo: dispatchInvoiceNo.trim(),
+      await batchesApi.patch(id, {
+        status: 'dispatched', dispatchedAt: new Date().toISOString(),
+        destinationEnterprise: dispatchDestination.trim(), invoiceNo: dispatchInvoiceNo.trim(),
       });
-      setIsDispatchModalOpen(false);
-      setDispatchBatchId('');
-      setDispatchDestination('');
-      setDispatchInvoiceNo('');
-      refresh();
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setDispatchError(err.message);
-      } else {
-        setDispatchError('Failed to update batch');
-      }
-    } finally {
-      setDispatchLoading(false);
-    }
+      setIsDispatchModalOpen(false); setDispatchBatchId(''); setDispatchDestination(''); setDispatchInvoiceNo(''); refresh();
+    } catch (err) { setDispatchError(err instanceof ApiError ? err.message : 'Failed to update batch'); }
+    finally { setDispatchLoading(false); }
   };
 
-  const headerActions = (
-    <div className="flex flex-col sm:flex-row gap-spacing-sm">
-      <Button kind="secondary" renderIcon={Connect} onClick={() => setIsDispatchModalOpen(true)}>{tDashboard('manage_transfers')}</Button>
-      <Button kind="primary" renderIcon={Add} onClick={() => setIsIncomingModalOpen(true)}>{tDashboard('record_incoming')}</Button>
-    </div>
-  );
-
+  /* ── Page header ─────────────────────────────────────────────────────── */
   const pageHeader = (
-    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-spacing-lg py-spacing-xl animate-fade-in">
-      <div>
-        <h1 className="text-h1">{tDashboard('warehouse_ops')}</h1>
-        <p className="text-body mt-spacing-xs max-w-lg">{tDashboard('ops_description')}</p>
+    <div className="wd-header">
+      <div className="wd-header-left">
+        <p className="wd-role-tag">Warehouse Operations · HoneyTRACE</p>
+        <h1 className="wd-title">{tDashboard('warehouse_ops')}</h1>
+        <p className="wd-subtitle">{tDashboard('ops_description')}</p>
       </div>
-      <div className="shrink-0">
-        {headerActions}
+      <div className="wd-header-actions">
+        <Button kind="secondary" renderIcon={Connect} onClick={() => setIsDispatchModalOpen(true)}>
+          {tDashboard('manage_transfers')}
+        </Button>
+        <Button kind="primary" renderIcon={Add} onClick={() => setIsIncomingModalOpen(true)}>
+          {tDashboard('record_incoming')}
+        </Button>
       </div>
     </div>
   );
 
   return (
     <UnifiedDashboardLayout header={pageHeader}>
+      <IdentityVerificationModal isOpen={isKYCOpen} role="warehouse" onCompleteAction={completeKYC} />
+      <GuidedTour steps={tourSteps} isOpen={isTourOpen} onClose={closeTour} onComplete={completeTour} />
+
       {/* Record Incoming Modal */}
       <Modal
         open={isIncomingModalOpen}
@@ -228,22 +148,17 @@ export default function WarehouseDashboard() {
         primaryButtonDisabled={incomingLoading}
         onRequestClose={() => { setIsIncomingModalOpen(false); setIncomingBatchId(''); setIncomingError(null); }}
         onRequestSubmit={handleRecordIncoming}
+        size="sm"
       >
         <Stack gap={5}>
-          <TextInput
-            id="incoming-batch-id"
-            labelText="Batch ID"
-            placeholder="HT-YYYYMMDD-NNN"
-            value={incomingBatchId}
-            onChange={(e) => setIncomingBatchId(e.target.value)}
-          />
-          {incomingError && (
-            <InlineNotification kind="error" title="Error" subtitle={incomingError} lowContrast hideCloseButton />
-          )}
+          <p className="wd-modal-desc">Enter the batch ID to record it as received at this warehouse.</p>
+          <TextInput id="incoming-batch-id" labelText="Batch ID" placeholder="HT-YYYYMMDD-NNN"
+            value={incomingBatchId} onChange={e => setIncomingBatchId(e.target.value)} />
+          {incomingError && <InlineNotification kind="error" title="Error" subtitle={incomingError} lowContrast hideCloseButton />}
         </Stack>
       </Modal>
 
-      {/* Generate Pass (Dispatch) Modal */}
+      {/* Dispatch Modal */}
       <Modal
         open={isDispatchModalOpen}
         modalHeading={tDashboard('generate_pass')}
@@ -252,248 +167,250 @@ export default function WarehouseDashboard() {
         primaryButtonDisabled={dispatchLoading}
         onRequestClose={() => { setIsDispatchModalOpen(false); setDispatchBatchId(''); setDispatchDestination(''); setDispatchInvoiceNo(''); setDispatchError(null); }}
         onRequestSubmit={handleGeneratePass}
+        size="sm"
       >
         <Stack gap={5}>
-          <p className="text-body">Enter the Batch ID to mark as dispatched and generate a dispatch pass.</p>
-          <TextInput
-            id="dispatch-batch-id"
-            labelText="Batch ID"
-            placeholder="HT-YYYYMMDD-NNN"
-            value={dispatchBatchId}
-            onChange={(e) => setDispatchBatchId(e.target.value)}
-          />
-          <TextInput
-            id="dispatch-destination"
-            labelText="Destination Enterprise"
-            placeholder="e.g. Nectar Foods Pvt Ltd"
-            value={dispatchDestination}
-            onChange={(e) => setDispatchDestination(e.target.value)}
-          />
-          <TextInput
-            id="dispatch-invoice-no"
-            labelText="Invoice Number"
-            placeholder="e.g. INV-2026-00421"
-            value={dispatchInvoiceNo}
-            onChange={(e) => setDispatchInvoiceNo(e.target.value)}
-          />
-          {dispatchError && (
-            <InlineNotification kind="error" title="Error" subtitle={dispatchError} lowContrast hideCloseButton />
-          )}
+          <p className="wd-modal-desc">Mark a certified batch as dispatched and generate a dispatch pass.</p>
+          <TextInput id="dispatch-batch-id" labelText="Batch ID" placeholder="HT-YYYYMMDD-NNN"
+            value={dispatchBatchId} onChange={e => setDispatchBatchId(e.target.value)} />
+          <TextInput id="dispatch-destination" labelText="Destination Enterprise" placeholder="e.g. Nectar Foods Pvt Ltd"
+            value={dispatchDestination} onChange={e => setDispatchDestination(e.target.value)} />
+          <TextInput id="dispatch-invoice-no" labelText="Invoice Number" placeholder="e.g. INV-2026-00421"
+            value={dispatchInvoiceNo} onChange={e => setDispatchInvoiceNo(e.target.value)} />
+          {dispatchError && <InlineNotification kind="error" title="Error" subtitle={dispatchError} lowContrast hideCloseButton />}
         </Stack>
       </Modal>
 
-      <IdentityVerificationModal
-        isOpen={isKYCOpen}
-        role="warehouse"
-        onCompleteAction={completeKYC}
-      />
-      <GuidedTour
-        steps={tourSteps}
-        isOpen={isTourOpen}
-        onClose={closeTour}
-        onComplete={completeTour}
-      />
+      {/* ── KPI Row ──────────────────────────────────────────────────────── */}
+      <section className="wd-kpi-grid" aria-label="Warehouse key metrics">
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-spacing-lg">
-        <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
-          <div className="absolute right-[-20px] top-[-20px] opacity-10 group-hover:rotate-12 transition-transform duration-700">
-            <InventoryManagement size={100} />
+        <div className="wd-kpi-card">
+          <div className="wd-kpi-top">
+            <div className="wd-kpi-icon wd-kpi-icon--blue"><InventoryManagement size={22} /></div>
+            <p className="wd-kpi-label">{tDashboard('stock_level')}</p>
+            <p className="wd-kpi-value">{loading ? '—' : `${stockKg.toLocaleString()} kg`}</p>
           </div>
-          <div className="flex justify-between items-start mb-spacing-md">
-            <span className="text-caption">{tDashboard('stock_level')}</span>
-            <div className="p-2 bg-primary/10 rounded-lg text-primary">
-              <InventoryManagement size={20} />
-            </div>
-          </div>
-          <div className="text-h2 font-mono text-gradient">
-            {loading ? '…' : `${stockKg.toLocaleString()} kg`}
-          </div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase mt-spacing-xs tracking-widest">{tDashboard('active_batches', { count: inWarehouseCount })}</p>
-          <div className="h-10 w-full bg-slate-50 flex items-end px-2 gap-1 pb-1 mt-spacing-lg rounded-lg border border-slate-100 overflow-hidden">
-            {[40, 70, 45, 90, 65, 80, 50, 85].map((h, i) => (
-              <div key={i} style={{ height: `${h}%` }} className="flex-1 bg-primary/30 rounded-t-sm hover:bg-primary transition-all cursor-pointer" />
-            ))}
-          </div>
-        </Tile>
-
-        <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
-          <div className="absolute right-[-20px] top-[-20px] opacity-10 group-hover:scale-110 transition-transform duration-700 text-primary">
-            <Temperature size={100} />
-          </div>
-          <div className="flex justify-between items-start mb-spacing-md">
-            <span className="text-caption">{tDashboard('avg_temp')}</span>
-            <div className="p-2 bg-primary/10 rounded-lg text-primary">
-              <Temperature size={20} />
-            </div>
-          </div>
-          <div className="text-h2 font-mono text-gradient">
-            {avgMoisture == null ? '--' : `${Math.max(18, Math.min(32, 20 + (avgMoisture - 17) * 0.8)).toFixed(1)}°C`}
-          </div>
-          <p className="text-[10px] font-bold text-success mt-spacing-xs uppercase tracking-widest">
-            {avgMoisture == null ? 'Awaiting telemetry' : tDashboard('environment_optimal')}
-          </p>
-          <div className="h-10 w-full bg-slate-50 flex items-center px-4 mt-spacing-lg rounded-lg border border-slate-100">
-            <div className="w-full h-1 bg-slate-200 rounded-full relative">
-              <div className="absolute left-[60%] top-[-6px] w-4 h-4 bg-primary rounded-full border-4 border-white shadow-lg ring-4 ring-primary/20 transition-all" />
-            </div>
-          </div>
-        </Tile>
-
-        <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
-          <div className="absolute right-[-20px] top-[-20px] opacity-10 group-hover:rotate-[-12deg] transition-transform duration-700 text-primary">
-            <Humidity size={100} />
-          </div>
-          <div className="flex justify-between items-start mb-spacing-md">
-            <span className="text-caption">{tDashboard('humidity')}</span>
-            <div className="p-2 bg-primary/10 rounded-lg text-primary">
-              <Humidity size={20} />
-            </div>
-          </div>
-          <div className="text-h2 font-mono text-gradient">{avgMoisture == null ? '--' : `${Math.max(35, Math.min(75, 45 + avgMoisture)).toFixed(0)}%`}</div>
-          <p className="text-[10px] font-bold text-success mt-spacing-xs uppercase tracking-widest">{tDashboard('environment_stable')}</p>
-          <div className="h-2 w-full bg-slate-100 rounded-full mt-spacing-lg overflow-hidden">
-            <div className="h-full bg-primary/50 rounded-full transition-all" style={{ width: `${avgMoisture == null ? 0 : Math.max(35, Math.min(75, 45 + avgMoisture))}%` }} />
-          </div>
-        </Tile>
-
-        <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
-          <div className="absolute right-[-20px] top-[-20px] opacity-10 group-hover:translate-x-4 transition-transform duration-700 text-primary">
-            <Delivery size={100} />
-          </div>
-          <div className="flex justify-between items-start mb-spacing-md">
-            <span className="text-caption">{tDashboard('dispatched')}</span>
-            <div className="p-2 bg-primary/10 rounded-lg text-primary">
-              <Delivery size={20} />
-            </div>
-          </div>
-          <div className="text-h2 font-mono text-gradient">{loading ? '…' : `${dispatchedKg.toLocaleString()} kg`}</div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase mt-spacing-xs tracking-widest">{tDashboard('shipments_count', { count: dispatchedCount })}</p>
-        </Tile>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-spacing-lg">
-        {/* Inventory Section */}
-        <div className="lg:col-span-2 flex flex-col gap-spacing-lg">
-          <Tile className="glass-panel p-spacing-xl rounded-2xl shadow-xl elevation-premium">
-            <h3 className="text-h3 flex items-center gap-4 mb-spacing-xl">
-              <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                <InventoryManagement size={24} />
-              </div>
-              {tDashboard('storage_map')}
-            </h3>
-            <div className="grid grid-cols-4 sm:grid-cols-8 gap-4 mb-spacing-xl">
-              {Array.from({ length: 16 }).map((_, i) => {
-                const occupied = occupancySet.has(i);
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    aria-label={`Rack R${i + 1} — ${occupied ? 'Occupied' : 'Available'}`}
-                    aria-pressed={occupied}
-                    className={`aspect-square rounded-xl border flex flex-col items-center justify-center text-[11px] font-bold transition-all group hover:scale-105 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary
-                      ${occupied ? 'bg-primary text-white shadow-xl ring-4 ring-primary/20 border-none' : 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-white hover:border-primary/30'}
-                    `}
-                  >
-                    <span className="opacity-60 group-hover:opacity-100">R{i+1}</span>
-                    {occupied && <div className="w-1 h-1 bg-white rounded-full mt-1 animate-pulse" />}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex gap-spacing-lg text-[11px] font-bold border-t border-slate-100 pt-spacing-lg uppercase tracking-widest text-slate-500">
-               <div className="flex items-center gap-2"><div className="w-3 h-3 bg-primary rounded shadow-sm" /> {tDashboard('storage_occupied')}</div>
-               <div className="flex items-center gap-2"><div className="w-3 h-3 bg-slate-50 border border-slate-100 rounded shadow-sm" /> {tDashboard('storage_available')}</div>
-            </div>
-          </Tile>
-
-          <div className="glass-panel rounded-2xl shadow-xl elevation-premium overflow-hidden border border-slate-100">
-            <div className="overflow-x-auto">
-            {error && (
-              <div className="p-spacing-md">
-                <InlineNotification kind="error" title="Failed to load batches" subtitle={error} lowContrast hideCloseButton />
-              </div>
-            )}
-            {loading ? (
-              <DataTableSkeleton columnCount={headers.length} rowCount={4} />
-            ) : (
-            <TableContainer
-              title={<span className="text-h3">{tDashboard('stock_management')}</span>}
-              description={tDashboard('stock_desc')}
-              className="!border-none !p-spacing-lg !bg-white"
-            >
-              <Table>
-                <TableHead>
-                  <TableRow className="!border-b-2 !border-slate-50">
-                    {headers.map((header) => (
-                      <TableHeader key={header.key} className="!bg-transparent !text-caption !text-[10px] !p-4">{header.header}</TableHeader>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {rows.map((row) => (
-                    <TableRow key={row.id} className="hover:!bg-slate-50 transition-colors border-none group">
-                      <TableCell className="!p-4 !border-none group-hover:pl-6 transition-all font-bold text-slate-900">{row.batch}</TableCell>
-                      <TableCell className="!p-4 !border-none">
-                        <Tag
-                          type={row.status === 'in_warehouse' ? 'green' : 'blue'}
-                          className="!rounded-md font-bold uppercase tracking-widest text-[10px] px-3 border-none"
-                        >
-                          {row.status}
-                        </Tag>
-                      </TableCell>
-                      <TableCell className="!p-4 !border-none text-slate-500 font-medium">{row.arrival}</TableCell>
-                      <TableCell className="!p-4 !border-none">
-                        {row.txHash ? (
-                          <div className="flex items-center gap-1">
-                            <span className="font-mono text-[11px] text-teal-700 break-all max-w-[180px]">{row.txHash}</span>
-                            <CopyableValue value={row.txHash} label="Copy" className="min-h-0 h-6 px-1" />
-                          </div>
-                        ) : (
-                          <span className="text-[10px] text-slate-400">Pending</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            )}
+          <div className="wd-kpi-body">
+            <p className="wd-kpi-sub">{loading ? '—' : `${inWarehouseCount} active batch${inWarehouseCount !== 1 ? 'es' : ''}`}</p>
+            <div className="wd-sparkbar">
+              {[40, 70, 45, 90, 65, 80, 50, 85].map((h, i) => (
+                <div key={i} className="wd-sparkbar-col" style={{ height: `${h}%` }} />
+              ))}
             </div>
           </div>
         </div>
 
-        {/* Sidebar Actions */}
-        <div className="flex flex-col gap-spacing-lg">
-          <PriorStepQR
-            stepName="Farmer / Harvest"
-            batchId={latestBatch?.batchId || latestBatch?.id || '--'}
-            details={latestBatch ? `Verified at source. Moisture: ${latestBatch.moisturePct}%` : 'No inbound batch scanned yet.'}
-          />
-          <BlockchainMapStamp
-            locationName={tDashboard('map_location')}
-            latitude="23.1245° N"
-            longitude="79.9430° E"
-            utcTime={mapUtcTime}
-          />
-          <Tile className="glass-panel p-spacing-xl rounded-3xl shadow-2xl elevation-premium">
-            <h3 className="text-h3 mb-spacing-lg">{tDashboard('inventory_ops')}</h3>
-            <Stack gap={4}>
-              <Button size="lg" kind="primary" className="w-full !max-w-none h-14 !rounded-xl shadow-xl" onClick={() => setIsIncomingModalOpen(true)}>
-                <span className="font-bold">{tDashboard('record_incoming')}</span>
-              </Button>
-              <Button size="lg" kind="secondary" className="w-full !max-w-none h-14 !rounded-xl shadow-lg border-slate-100" onClick={() => setIsDispatchModalOpen(true)}>
-                <span className="font-bold">{tDashboard('generate_pass')}</span>
-              </Button>
-              <div className="p-spacing-md bg-slate-50 rounded-2xl border border-slate-100 mt-spacing-md ring-1 ring-slate-100 shadow-inner">
-                 <p className="text-xs font-bold text-slate-800 mb-2 flex items-center gap-2">
-                   <div className="w-2 h-2 bg-success rounded-full animate-pulse" />
-                   {tDashboard('receipt_ready')}
-                 </p>
-                 <p className="text-[10px] text-slate-500 font-medium leading-relaxed uppercase tracking-tighter">{tDashboard('receipt_desc', { id: latestBatch?.batchId ?? latestBatch?.id ?? '—' })}</p>
+        <div className="wd-kpi-card">
+          <div className="wd-kpi-top">
+            <div className="wd-kpi-icon wd-kpi-icon--amber"><Temperature size={22} /></div>
+            <p className="wd-kpi-label">{tDashboard('avg_temp')}</p>
+            <p className="wd-kpi-value">{avgTemp == null ? '—' : `${avgTemp.toFixed(1)}°C`}</p>
+          </div>
+          <div className="wd-kpi-body">
+            <p className="wd-kpi-sub">{avgTemp == null ? 'Awaiting telemetry' : tDashboard('environment_optimal')}</p>
+            <div className="wd-temp-bar">
+              <div className="wd-temp-track">
+                <div className="wd-temp-thumb" style={{ left: `${avgTemp == null ? 60 : Math.min(95, Math.max(5, ((avgTemp - 15) / 20) * 100))}%` }} />
               </div>
-            </Stack>
-          </Tile>
+            </div>
+          </div>
+        </div>
+
+        <div className="wd-kpi-card">
+          <div className="wd-kpi-top">
+            <div className="wd-kpi-icon wd-kpi-icon--teal"><Humidity size={22} /></div>
+            <p className="wd-kpi-label">{tDashboard('humidity')}</p>
+            <p className="wd-kpi-value">{humidity == null ? '—' : `${humidity.toFixed(0)}%`}</p>
+          </div>
+          <div className="wd-kpi-body">
+            <p className="wd-kpi-sub">{tDashboard('environment_stable')}</p>
+            <div className="wd-progress-track">
+              <div className="wd-progress-fill" style={{ width: `${humidity ?? 0}%` }} />
+            </div>
+          </div>
+        </div>
+
+        <div className="wd-kpi-card">
+          <div className="wd-kpi-top">
+            <div className="wd-kpi-icon wd-kpi-icon--green"><Delivery size={22} /></div>
+            <p className="wd-kpi-label">{tDashboard('dispatched')}</p>
+            <p className="wd-kpi-value">{loading ? '—' : `${dispatchedKg.toLocaleString()} kg`}</p>
+          </div>
+          <div className="wd-kpi-body">
+            <p className="wd-kpi-sub">{loading ? '—' : `${dispatchedCount} shipment${dispatchedCount !== 1 ? 's' : ''}`}</p>
+          </div>
+        </div>
+
+      </section>
+
+      {/* ── Main content: Storage map + table + sidebar ───────────────────── */}
+      <div className="wd-content-grid">
+
+        {/* Left column */}
+        <div className="wd-content-main">
+
+          {/* Storage map */}
+          <div className="wd-card">
+            <div className="wd-card-header">
+              <InventoryManagement size={18} />
+              <h2 className="wd-card-title">{tDashboard('storage_map')}</h2>
+            </div>
+            <div className="wd-card-body">
+              <div className="wd-rack-grid">
+                {Array.from({ length: 16 }).map((_, i) => {
+                  const occupied = occupancySet.has(i);
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      aria-label={`Rack R${i + 1} — ${occupied ? 'Occupied' : 'Available'}`}
+                      aria-pressed={occupied}
+                      className={`wd-rack-cell ${occupied ? 'wd-rack-cell--occupied' : ''}`}
+                    >
+                      <span className="wd-rack-label">R{i + 1}</span>
+                      {occupied && <span className="wd-rack-dot" />}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="wd-rack-legend">
+                <div className="wd-rack-legend-item">
+                  <div className="wd-rack-swatch wd-rack-swatch--occupied" />
+                  {tDashboard('storage_occupied')}
+                </div>
+                <div className="wd-rack-legend-item">
+                  <div className="wd-rack-swatch" />
+                  {tDashboard('storage_available')}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Inventory table */}
+          <section className="wd-table-section" aria-labelledby="wd-ledger-title">
+            <div className="wd-table-header">
+              <div>
+                <h2 id="wd-ledger-title" className="wd-table-title">{tDashboard('stock_management')}</h2>
+                <p className="wd-table-desc">{tDashboard('stock_desc')}</p>
+              </div>
+              <span className="wd-table-count">{batches.length} {batches.length === 1 ? 'record' : 'records'}</span>
+            </div>
+
+            {error && (
+              <div className="p-4">
+                <InlineNotification kind="error" title="Failed to load batches" subtitle={error} lowContrast hideCloseButton />
+              </div>
+            )}
+
+            {loading ? (
+              <DataTableSkeleton columnCount={4} rowCount={4} />
+            ) : batches.length === 0 ? (
+              <div className="wd-empty">
+                <div className="wd-empty-icon"><InventoryManagement size={32} /></div>
+                <p className="wd-empty-title">No batches recorded</p>
+                <p className="wd-empty-desc">Record an incoming batch using the button above.</p>
+              </div>
+            ) : (
+              <div className="wd-table-scroll">
+                <table className="wd-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Batch</th>
+                      <th scope="col">{tDashboard('status')}</th>
+                      <th scope="col">{tDashboard('last_update')}</th>
+                      <th scope="col">On-Chain TX</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {batches.map(b => {
+                      const sm = getStatus(b.status);
+                      return (
+                        <tr key={b.id}>
+                          <td><span className="wd-batch-id">{b.batchId || b.id}</span></td>
+                          <td><Tag type={sm.type} className="wd-status-tag">{sm.label}</Tag></td>
+                          <td><span className="wd-date">{b.createdAt ? b.createdAt.slice(0, 10) : '—'}</span></td>
+                          <td>
+                            {b.onChainTxHash ? (
+                              <span className="wd-tx-hash">
+                                <span className="wd-tx-text">{b.onChainTxHash}</span>
+                                <CopyableValue value={b.onChainTxHash} label="Copy" className="min-h-0 h-6 px-1" />
+                              </span>
+                            ) : (
+                              <span className="wd-tx-pending">Pending</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </div>
+
+        {/* Right sidebar */}
+        <div className="wd-content-side">
+
+          {/* Geo stamp */}
+          <div className="wd-geo-card">
+            <div className="wd-geo-header">
+              <Location size={16} />
+              <span className="wd-geo-location">{tDashboard('map_location')}</span>
+              <span className="wd-geo-dot wd-geo-dot--live" aria-label="GPS active" />
+            </div>
+            <div className="wd-geo-coords">
+              <div>
+                <span className="wd-geo-meta">Coordinates</span>
+                <span className="wd-geo-val">23.1245° N, 79.9430° E</span>
+              </div>
+              <div className="wd-geo-ts">
+                <Time size={12} />
+                <span className="wd-geo-val" suppressHydrationWarning>{mapUtcTime} <strong>UTC</strong></span>
+              </div>
+            </div>
+            <p className="wd-geo-footer">Geo-secured &amp; blockchain-stamped</p>
+          </div>
+
+          {/* Latest batch reference */}
+          {latestBatch && (
+            <div className="wd-latest-batch">
+              <div className="wd-latest-icon"><QrCode size={28} /></div>
+              <div className="wd-latest-info">
+                <div className="wd-latest-header">
+                  <span className="wd-latest-label">Latest Batch</span>
+                  <span className="wd-latest-verified"><Blockchain size={11} /> Verified</span>
+                </div>
+                <p className="wd-latest-id">{latestBatch.batchId || latestBatch.id}</p>
+                <p className="wd-latest-desc">Moisture: {latestBatch.moisturePct}% · {latestBatch.floraType}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Quick actions */}
+          <div className="wd-actions-card">
+            <h3 className="wd-actions-title">{tDashboard('inventory_ops')}</h3>
+            <div className="wd-actions-body">
+              <Button size="lg" kind="primary" className="w-full !max-w-none" renderIcon={Add}
+                onClick={() => setIsIncomingModalOpen(true)}>
+                {tDashboard('record_incoming')}
+              </Button>
+              <Button size="lg" kind="secondary" className="w-full !max-w-none" renderIcon={Connect}
+                onClick={() => setIsDispatchModalOpen(true)}>
+                {tDashboard('generate_pass')}
+              </Button>
+              {latestBatch && (
+                <div className="wd-receipt-note">
+                  <span className="wd-receipt-dot" />
+                  <div>
+                    <p className="wd-receipt-title">{tDashboard('receipt_ready')}</p>
+                    <p className="wd-receipt-id">{tDashboard('receipt_desc', { id: latestBatch.batchId ?? latestBatch.id ?? '—' })}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
         </div>
       </div>
     </UnifiedDashboardLayout>

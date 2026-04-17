@@ -140,12 +140,16 @@ export default function ConsumerPortal() {
     : [];
 
   const pageHeader = (
-    <div className="text-center max-w-2xl mx-auto py-spacing-xl animate-fade-in">
-      <div className="w-20 h-20 glass-panel rounded-3xl flex items-center justify-center mx-auto mb-spacing-lg text-primary shadow-2xl elevation-premium ring-1 ring-white/50">
-        <Security size={40} />
+    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 py-6">
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded-xl bg-white border border-gray-200 shadow-sm flex items-center justify-center text-blue-600 shrink-0">
+          <Security size={24} />
+        </div>
+        <div>
+          <h1 className="text-h1" style={{ fontSize: '1.75rem' }}>HoneyTrace Consumer Portal</h1>
+          <p className="text-body mt-1">{tDashboard('portal_subtitle')}</p>
+        </div>
       </div>
-      <h1 className="text-h1 mb-spacing-xs">HoneyTrace</h1>
-      <p className="text-body max-w-lg mx-auto">{tDashboard('portal_subtitle')}</p>
     </div>
   );
 
