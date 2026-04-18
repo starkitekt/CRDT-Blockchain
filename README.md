@@ -259,9 +259,131 @@ The supply chain flow validates role transitions across:
 
 On-chain anchoring happens automatically at key status transitions (`in_warehouse`, `certified`, `dispatched`, `recalled`) and when lab results are published.
 
+### On-Chain Anchoring: Staged Batch IDs
+
+`HoneyTraceRegistry.recordBatch` enforces immutability per `batchId`:
+
+```solidity
+require(existing.dataHash == dataHash, "BATCH_HASH_MISMATCH");
+```
+
+Because every supply-chain milestone produces a *different* payload (the
+batch object grows: warehouse intake adds receipt metadata, lab adds
+results, dispatch adds carrier info, etc.), re-anchoring under the same
+`batchId` would always revert.
+
+The backend therefore writes each milestone under a deterministic
+**staged id** of the form:
+
+```
+<batchId>#<status>     e.g. HT-20260417-0007#stored
+                            HT-20260417-0007#certified
+                            HT-20260417-0007#dispatched
+```
+
+Properties:
+
+- Each milestone is its own immutable on-chain receipt
+- All receipts are deterministically attributable to the parent batch
+  via the `id` prefix
+- Marketplace settlements use the listing's already-unique
+  `MK-YYYYMMDD-NNN` id and so don't need a suffix
+- The DB still stores only the latest `onChainTxHash` /
+  `onChainDataHash`; full per-stage history lives on chain
+
+Implementation: see `BIZ_STEP` and `anchorBatchOnChain` calls in
+`src/lib/services/batch.service.ts`.
+
+### Verifying On-Chain Anchoring
+
+A standalone script sends three real Base Sepolia transactions
+(harvest, staged storage, marketplace settlement) and prints explorer
+links — useful for sanity-checking a freshly-funded relayer:
+
+```bash
+node scripts/verify-sepolia-anchor.cjs
+```
+
+Requires `BLOCKCHAIN_RELAYER_PRIVATE_KEY`,
+`HONEYTRACE_CONTRACT_ADDRESS`, and `BASE_SEPOLIA_RPC_URL` in
+`.env.local`. Total cost on L2 is ≈ 0.000001 ETH.
+
 ## UX Notes
 
 Transaction hash/ID copy controls are available in dashboard and traceability surfaces where hash-like values are shown (lab, officer, enterprise, onboarding receipt, certificate modal).
+
+## Unified Design System v2
+
+All role dashboards (farmer, warehouse, lab, officer, enterprise,
+consumer, secretary, admin) and the marketplace render against a single
+set of design tokens and component utilities defined in
+`src/app/globals.css`. The Enterprise dashboard was the visual
+reference; every other dashboard was migrated to inherit from the
+shared utilities (legacy namespaced classes such as `wd-header`,
+`ld-header`, `od-header`, `sd-header`, `wd-kpi-card`, `fd-kpi-card`,
+`wd-modal-desc`, `fd-modal-desc` are now thin aliases).
+
+Key utilities:
+
+| Class | Purpose |
+|-------|---------|
+| `.page-header` (+ `.page-header-icon`, `.page-header-eyebrow`, `.page-header-actions`) | Canonical dashboard header: icon tile, eyebrow, `text-h3` title, subtitle, right-aligned actions, responsive wrap |
+| `.kpi-card` (+ `.kpi-card--accent-error/warn/info/success`) | KPI tile: 14px radius, 1px border, neutral shadow, hover lift, optional 3px top accent |
+| `.tint-blue/amber/green/red/purple/error/warn/info/success` | Semantic icon-tile background tints |
+| `.cds-modal-desc` | Standard modal body description text (alias: `wd-modal-desc`, `fd-modal-desc`) |
+| `.vloc*` (`.vloc`, `.vloc--centered`, `.vloc-status[data-state]`, `.vloc-coords`, `.vloc-btn`, `.vloc-btn--primary/--ghost/--block`, `.vloc-help`, `.vloc-help--error`, `.vloc-status-dot`) | "Verify location" card used by the farmer onboarding GPS step. Add `.vloc--centered` inside single-column wizards for the hero-centered variant (icon stacks above the title, status + coords + actions align centrally). |
+| `.onboard-step-intro`, `.onboard-step-lede`, `.onboard-upload-zone`, `.onboard-success-icon` | Onboarding wizard typography + zones |
+| `.text-gradient`, `.text-gradient-cool` | Honey-amber and cool brand title gradients |
+| `.glass-panel`, `.glass-panel-translucent` | Solid surface vs translucent blurred surface (used by marketplace) |
+
+Tokens (defined as CSS variables on `:root`):
+
+- Radii: `--radius-sm/md/lg/xl/pill`
+- Brand accents: `--accent-honey-50/300/500/700`, `--accent-blockchain`
+- Spacing: `--spacing-1` … `--spacing-12`
+- Typography: `text-h1/h2/h3/h4/body/caption/label`
+
+Accessibility:
+
+- All `.vloc-btn` controls meet WCAG 2.5.5 minimum 44×44 hit target
+- `@media (prefers-reduced-motion: reduce)` disables KPI hover lifts,
+  loading shimmers, and onboarding transitions
+- GPS verification uses `role="region"` + `aria-live="polite"` so
+  screen readers announce state changes; the in-card `.vloc-help`
+  carries the error message instead of a duplicate `InlineNotification`
+
+When adding a new dashboard or page, prefer the utilities above before
+introducing namespaced CSS — namespaced classes should only exist as
+aliases that point at the unified utilities.
+
+### Marketplace UI
+
+The marketplace (`/[locale]/dashboard/marketplace`) renders against the
+same unified system:
+
+- **Header** — `.page-header` + `.page-header-icon`/`-eyebrow`/`-title`/
+  `-subtitle`/`-actions`, exactly matching every role dashboard.
+- **KPI strip** — `.kpi-card` / `.kpi-card-body` / `-label` / `-value` /
+  `-meta`, with `.kpi-card--accent-honey` on "Live auctions" to flag the
+  primary CTA.
+- **Listing card** (`.listing-card` in `marketplace.module.css`):
+  - solid white surface, `border-radius: 14px`, `1.125rem 1.25rem 1rem`
+    padding, subtle hover lift (`translateY(-1px)` + border darken);
+  - 3px top gradient bar (amber for live, emerald for settled, slate for
+    unsold / cancelled);
+  - `.price-display` — monospace 1.375rem → 1.5rem at ≥1280px, tabular
+    numerals, wraps gracefully on very large values;
+  - `.countdown` — 1.25rem monospace for live timers only, reserves the
+    red-pulse `.ending` state exclusively for the final 60 seconds;
+  - `.closed-date` — 0.9375rem body weight for settled / unsold /
+    cancelled dates, so the date never competes visually with the price
+    column.
+- **Listing card status never shows the `.ending` (red pulse) animation
+  on non-live listings** — the previous behaviour was a visual bug that
+  made settled auctions appear alarming.
+- Grid gaps use `gap-spacing-md` (24px) across KPI strip and listings
+  grid so the marketplace matches the density of the other dashboards
+  exactly.
 
 ## Smart Contract
 

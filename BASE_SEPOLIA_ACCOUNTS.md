@@ -71,6 +71,50 @@ NEXT_PUBLIC_HONEYTRACE_CONTRACT=0x2D85452bed2DE0613E09a8CC2d9C0e4beC26D8b6
 NEXT_PUBLIC_MIN_BALANCE_ETH=0.002
 ```
 
+## Anchoring Pattern: Staged Batch IDs
+
+`HoneyTraceRegistry.recordBatch` is **append-only per id** —
+re-anchoring the same `batchId` with a different payload reverts as
+`BATCH_HASH_MISMATCH`. Because every supply-chain milestone changes
+the payload (warehouse intake, lab results, dispatch, etc.), the
+backend writes each milestone under a deterministic *staged id*:
+
+```
+<batchId>#<status>     e.g. HT-20260417-0007#stored
+                            HT-20260417-0007#certified
+                            HT-20260417-0007#dispatched
+```
+
+- Each milestone is its own immutable on-chain receipt.
+- All receipts trace back to the parent batch via the id prefix.
+- Marketplace settlements use the listing's already-unique
+  `MK-YYYYMMDD-NNN` id and need no suffix.
+
+Implementation: `src/lib/services/batch.service.ts`
+(`anchorBatchOnChain(stagedId, …)`).
+
+## End-to-End On-Chain Verification
+
+A standalone script sends three real Base Sepolia transactions
+(harvest, staged storage, marketplace settlement) and prints explorer
+URLs — useful as a smoke test after funding the relayer or rotating
+the contract:
+
+```bash
+node scripts/verify-sepolia-anchor.cjs
+```
+
+Sample successful run (2026-04-17, contract
+`0x2D85452bed2DE0613E09a8CC2d9C0e4beC26D8b6`):
+
+| Step                              | Tx hash                                                              | Block      |
+|-----------------------------------|----------------------------------------------------------------------|------------|
+| Harvest (commissioning)           | `0x1b5fe6305395ead3365a03be862281b110cafeb09c471ec3584071f589857735` | 40 340 822 |
+| Warehouse stored (staged id)      | `0x40f281b19e859fccdd2149e3899b6ba5567aa050c7db416d4fc01f86b393ad2a` | 40 340 823 |
+| Marketplace auction settlement    | `0xc443796a61228204427bae337f016667a4c7602f808e0101a7c8564a69c3fba5` | 40 340 824 |
+
+Total cost on L2: ≈ 0.000001 ETH for all three.
+
 ## Quick Health Check
 
 ```bash

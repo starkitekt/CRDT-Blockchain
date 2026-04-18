@@ -3,6 +3,100 @@
 > Generated: 2026-04-05 Â· Last updated: 2026-04-09 (patch round 4) Â· Audited against every file in `src/` and `scripts/`.
 
 ---
+## 0a. Latest Patch (2026-04-17) — Unified UI + On-Chain Anchoring Fix
+
+### UI: Unified Design System v2
+
+Every role dashboard (farmer, warehouse, lab, officer, enterprise,
+consumer, secretary, admin) and the marketplace now render against a
+single set of tokens and component utilities defined in
+`src/app/globals.css`. The Enterprise dashboard was the visual reference.
+
+- New utilities (canonical): `.page-header` (+ `-icon`/`-eyebrow`/`-actions`),
+  `.kpi-card` (+ `--accent-error|warn|info|success`), semantic `tint-*`
+  classes, `.cds-modal-desc`, `.text-gradient` / `.text-gradient-cool`,
+  `.glass-panel` / `.glass-panel-translucent`.
+- Verify-location card: full `.vloc*` family
+  (`.vloc`, `.vloc--centered`, `.vloc-status[data-state]`,
+  `.vloc-coords`, `.vloc-btn` + `--primary`/`--ghost`/`--block`,
+  `.vloc-help` + `--error`, `.vloc-status-dot`,
+  `.onboard-step-intro/-lede`, `.onboard-success-icon`).
+  The `.vloc--centered` hero variant is used inside single-column
+  wizards (farmer onboarding GPS step, blockchain receipt card): icon
+  stacks above title, status + coords + actions center horizontally.
+- Legacy namespaced classes (`wd-header`, `ld-header`, `od-header`,
+  `sd-header`, `wd-kpi-card`, `fd-kpi-card`, `wd-modal-desc`,
+  `fd-modal-desc`) are now thin aliases that inherit from the
+  unified utilities — no visual divergence between dashboards.
+- Tokens (`:root`): `--radius-sm/md/lg/xl/pill`,
+  `--accent-honey-50/300/500/700`, `--accent-blockchain`,
+  `--spacing-1..12`, typography classes `text-h1/h2/h3/h4/body/caption/label`.
+- Accessibility: `.vloc-btn` meets WCAG 2.5.5 (44×44 hit area);
+  `@media (prefers-reduced-motion: reduce)` disables KPI hover lifts,
+  shimmer, and onboarding transitions; GPS step uses
+  `role="region"` + `aria-live="polite"`; in-card `.vloc-help`
+  replaces redundant `InlineNotification`.
+- Farmer onboarding (`SimplifiedFarmerOnboarding.tsx`) was rewritten
+  on top of the new utilities and now hardens GPS acquisition with
+  explicit `window.isSecureContext`, `navigator.geolocation`, and
+  per-error-code (`PERMISSION_DENIED` / `POSITION_UNAVAILABLE` /
+  `TIMEOUT`) handling.
+
+When adding a new dashboard or page, prefer the utilities above before
+introducing namespaced CSS — namespaced classes should only exist as
+aliases that point at the unified utilities.
+
+**Marketplace-specific notes** (`/[locale]/dashboard/marketplace`):
+
+- Header uses `.page-header` (identical to every role dashboard).
+- KPI strip uses `.kpi-card` / `.kpi-card-body` / `-label` / `-value` /
+  `-meta` with `.kpi-card--accent-honey` on "Live auctions" only —
+  replacing the previous oversized `text-h1 text-gradient` numerals.
+- `.listing-card` (in `src/components/Marketplace/marketplace.module.css`)
+  is now a solid white surface with 14px radius, 1.125rem 1.25rem 1rem
+  padding, translucent hover lift, and a 3px top accent bar. The
+  `.price-display` is 1.375rem → 1.5rem @xl monospace with tabular
+  numerals; the `.countdown` (1.25rem) is reserved for live timers only
+  and `.closed-date` (0.9375rem, body weight) is used for
+  settled/unsold/cancelled dates.
+- The `.ending` (red pulse) animation is now applied only when
+  `status === 'live'` AND `ms < 60_000`, never to closed listings —
+  fixes the visual bug where settled cards showed a pulsing red date.
+- Grid gaps use `gap-spacing-md` (24px) matching the rest of the app.
+
+### On-Chain Anchoring: Staged Batch IDs
+
+`HoneyTraceRegistry.recordBatch` enforces immutability per `batchId`
+via `require(existing.dataHash == dataHash, "BATCH_HASH_MISMATCH")`.
+Because each supply-chain milestone produces a *different* payload
+(warehouse intake adds receipt metadata, lab adds results, dispatch
+adds carrier info, etc.), re-anchoring under the same `batchId` always
+reverted, flooding logs with `BATCH_HASH_MISMATCH`.
+
+Fix in `src/lib/services/batch.service.ts`: each milestone now anchors
+under a deterministic **staged id**:
+
+```
+<batchId>#<status>     e.g. HT-20260417-0007#stored
+                            HT-20260417-0007#certified
+                            HT-20260417-0007#dispatched
+```
+
+- Each milestone is its own immutable on-chain receipt.
+- All receipts are deterministically attributable to the parent batch
+  via the `id` prefix.
+- Marketplace settlements use the listing's already-unique
+  `MK-YYYYMMDD-NNN` id and don't need a suffix.
+- The DB still stores only the latest `onChainTxHash` /
+  `onChainDataHash`; full per-stage history lives on chain.
+
+Verified live on Base Sepolia (chain 84532, contract
+`0x2D85452bed2DE0613E09a8CC2d9C0e4beC26D8b6`) by
+`scripts/verify-sepolia-anchor.cjs`, which sends three real
+transactions (harvest, staged storage, marketplace settlement) and
+prints explorer URLs. Total cost on L2: ≈ 0.000001 ETH.
+
+---
 ## 0. Latest Patch (2026-04-09)
 
 ### Fixed in this round

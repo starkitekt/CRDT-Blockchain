@@ -154,19 +154,45 @@
   color: var(--text-secondary);
 }
 
+/* Honey-amber gradient text. Used for headline numerals + brand accents.
+   Falls back to a solid dark slate via `color` for browsers that don't
+   support background-clip:text (and for screen readers / copy-paste). */
 .text-gradient {
   color: #111827;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #92400e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Optional cool-blue variant for non-honey contexts (charts, blockchain). */
+.text-gradient-cool {
+  color: #0a1f44;
+  background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 50%, #1e3a8a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Utility / Overrides
+   Surface / Elevation Tokens
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* Solid surface, used as the default card background everywhere. */
 .glass-panel {
   background: #ffffff;
   border: 1px solid #e5e7eb;
   box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+}
+
+/* Translucent variant — sits on top of gradients/imagery (marketplace cards). */
+.glass-panel-translucent {
+  background: rgba(255, 255, 255, 0.78);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .glass-panel-heavy {
@@ -177,11 +203,12 @@
 
 .elevation-premium {
   box-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 4px 12px rgba(0,0,0,0.05);
-  transition: box-shadow 0.2s ease;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .elevation-premium:hover {
-  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  box-shadow: 0 8px 28px -8px rgba(15,23,42,0.18);
+  transform: translateY(-1px);
 }
 
 .side-drawer {
@@ -2279,91 +2306,32 @@ body.high-contrast .lp-section-hd p {
    WAREHOUSE DASHBOARD  (wd-*)
    ============================================================ */
 
-.wd-header {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 1rem;
-  padding: 1.5rem 0;
-}
-.wd-role-tag {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #6b7280;
-  margin-bottom: 0.25rem;
-}
-.wd-title {
-  font-size: 2rem;
-  font-weight: 800;
-  color: #111827;
-  line-height: 1.2;
-  margin: 0 0 0.25rem;
-}
-.wd-subtitle {
-  font-size: 0.875rem;
-  color: #6b7280;
-  margin: 0;
-}
-.wd-header-actions {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
+/* Header rules for .wd-header / .wd-title / .wd-subtitle / .wd-role-tag /
+   .wd-header-actions live in the unified DESIGN SYSTEM v2 block at the
+   bottom of this file. Removed from here to keep one source of truth. */
 
 .wd-kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1rem;
 }
-.wd-kpi-card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 1.25rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
-}
+/* Surface rules (background/border/radius/shadow/hover) for .wd-kpi-card
+   live in the unified DESIGN SYSTEM v2 block at the bottom of this file.
+   Only padding stays here so the per-namespace inner spacing is preserved. */
+.wd-kpi-card { padding: 1.25rem; }
+
 .wd-kpi-top {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 0.75rem;
 }
-.wd-kpi-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: #6b7280;
-}
-.wd-kpi-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.wd-kpi-icon--blue  { background: #dbeafe; color: #2563eb; }
-.wd-kpi-icon--amber { background: #fef3c7; color: #d97706; }
-.wd-kpi-icon--teal  { background: #ccfbf1; color: #0d9488; }
-.wd-kpi-icon--green { background: #dcfce7; color: #16a34a; }
-.wd-kpi-value {
-  font-size: 2rem;
-  font-weight: 800;
-  color: #111827;
-  line-height: 1;
-  margin-bottom: 0.25rem;
-}
-.wd-kpi-meta {
-  font-size: 0.75rem;
-  color: #6b7280;
-}
-.wd-kpi-delta { font-size: 0.75rem; font-weight: 600; color: #16a34a; }
-.wd-kpi-delta--warn  { color: #d97706; }
-.wd-kpi-delta--error { color: #dc2626; }
+/* .wd-kpi-label / .wd-kpi-icon / .wd-kpi-icon--<tint> / .wd-kpi-value /
+   .wd-kpi-meta visuals live in the unified DESIGN SYSTEM v2 block at the
+   bottom of this file. Only the warehouse-only delta utilities stay here. */
+.wd-kpi-delta { font-size: 0.75rem; font-weight: 600; color: var(--success); }
+.wd-kpi-delta--warn  { color: var(--warning); }
+.wd-kpi-delta--error { color: var(--error); }
 
 .wd-sparkbar {
   display: flex;
@@ -2656,111 +2624,515 @@ body.high-contrast .lp-section-hd p {
 
 /* ============================================================
    SHARED DASHBOARD HEADERS  (ld-* / od-* / sd-*)
-   All follow the same pattern as wd-header
+   The visual rules for these classes now live in the unified
+   "DESIGN SYSTEM v2" block at the bottom of this file. We keep
+   only the namespace-specific overrides here (none right now —
+   intentionally empty so the cascade has a single source of
+   truth).
    ============================================================ */
 
-/* ── Lab Dashboard (ld-*) ───────────────────────────────────── */
-.ld-header {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 1rem;
-  padding: 1.5rem 0;
-}
-.ld-role-tag {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #6b7280;
-  margin-bottom: 0.25rem;
-}
-.ld-title {
-  font-size: 2rem;
-  font-weight: 800;
-  color: #111827;
-  line-height: 1.2;
-  margin: 0 0 0.25rem;
-}
-.ld-subtitle {
-  font-size: 0.875rem;
-  color: #6b7280;
-  margin: 0;
-}
-.ld-header-actions {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   UNIFIED DESIGN SYSTEM v2 — single source of truth for typography,
+   surfaces, KPI cards and the location-verify step. All previous namespaced
+   blocks (fd-, wd-, ld-, od-, sd-) inherit visuals from these utilities so
+   any markup that uses either path looks identical.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Radius scale — pick ONE per element tier:
+     - radius-sm  : tags, status pills, micro-controls
+     - radius-md  : inputs, buttons, small icon containers
+     - radius-lg  : nested cards, callouts, dropdowns
+     - radius-xl  : top-level cards, KPI tiles, modals
+     - radius-pill: round buttons, badges */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 9999px;
+
+  /* Brand accents — derived from the honey-amber gradient. */
+  --accent-honey-50:  #fff8ec;
+  --accent-honey-100: #fef3c7;
+  --accent-honey-300: #fcd34d;
+  --accent-honey-500: #f59e0b;
+  --accent-honey-700: #b45309;
+  --accent-honey-900: #78350f;
+
+  --accent-blockchain: #0ea5e9;
 }
 
-/* ── Officer Dashboard (od-*) ───────────────────────────────── */
-.od-header {
+/* ── Page Header — used by every dashboard ────────────────────────────── */
+/* Mirrors the legacy *-header behaviour (flex row + wrap) so that role
+   dashboards using .page-header markup look identical to the ones still
+   using fd-/wd-/ld-/od-/sd- markup at every breakpoint. */
+.page-header {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-end;
   justify-content: space-between;
-  align-items: flex-end;
   gap: 1rem;
-  padding: 1.5rem 0;
-}
-.od-role-tag {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #6b7280;
-  margin-bottom: 0.25rem;
-}
-.od-title {
-  font-size: 2rem;
-  font-weight: 800;
-  color: #111827;
-  line-height: 1.2;
-  margin: 0 0 0.25rem;
-}
-.od-subtitle {
-  font-size: 0.875rem;
-  color: #6b7280;
-  margin: 0;
-}
-.od-header-actions {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
-  flex-wrap: wrap;
+  padding: 1.25rem 0 1.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 1.5rem;
 }
 
-/* ── Secretary Dashboard (sd-*) ─────────────────────────────── */
-.sd-header {
+@media (min-width: 768px) {
+  .page-header { gap: 1.5rem; }
+}
+
+.page-header-lead {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 1rem;
-  padding: 1.5rem 0;
+  min-width: 0;
 }
-.sd-role-tag {
-  font-size: 0.7rem;
+
+.page-header-icon {
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-lg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--accent-honey-100) 0%, #fff8ec 100%);
+  color: var(--accent-honey-700);
+  border: 1px solid var(--accent-honey-300);
+  box-shadow: 0 1px 2px rgba(245,158,11,0.18);
+}
+
+.page-header-text { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+
+.page-header-eyebrow {
+  font-size: 0.6875rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #6b7280;
-  margin-bottom: 0.25rem;
+  letter-spacing: 0.12em;
+  color: #94a3b8;
 }
-.sd-title {
-  font-size: 2rem;
+
+.page-header-title {
+  font-size: 1.875rem;
+  line-height: 1.15;
   font-weight: 800;
-  color: #111827;
-  line-height: 1.2;
-  margin: 0 0 0.25rem;
-}
-.sd-subtitle {
-  font-size: 0.875rem;
-  color: #6b7280;
+  letter-spacing: -0.03em;
+  color: #0f172a;
   margin: 0;
 }
-.sd-header-actions {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+
+@media (min-width: 768px) { .page-header-title { font-size: 2.25rem; } }
+
+.page-header-subtitle {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: #475569;
+  margin: 0;
+  max-width: 56ch;
 }
+
+.page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+  align-items: center;
+}
+
+/* ── Bring legacy *-header / *-title / *-subtitle / *-role-tag namespaces
+      into visual lockstep with .page-header. We keep the original class
+      names so existing markup keeps working, but every namespace looks
+      identical. ───────────────────────────────────────────────────────── */
+.wd-header, .ld-header, .od-header, .sd-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1.25rem 0 1.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 1.5rem;
+}
+
+.wd-title, .ld-title, .od-title, .sd-title {
+  font-size: 1.875rem;
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+  margin: 0 0 0.25rem;
+}
+@media (min-width: 768px) {
+  .wd-title, .ld-title, .od-title, .sd-title { font-size: 2.25rem; }
+}
+
+.wd-subtitle, .ld-subtitle, .od-subtitle, .sd-subtitle {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: #475569;
+  margin: 0;
+}
+
+.wd-role-tag, .ld-role-tag, .od-role-tag, .sd-role-tag,
+.fd-govid-role-tag {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 0.25rem;
+}
+
+.wd-header-actions, .ld-header-actions, .od-header-actions, .sd-header-actions {
+  display: flex;
+  gap: 0.625rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Farmer header keeps its richer government-id treatment but
+   re-uses the same title size + tracking as everyone else. */
+.fd-govid-name {
+  font-size: 1.875rem;
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+}
+@media (min-width: 768px) { .fd-govid-name { font-size: 2.25rem; } }
+
+
+/* ── KPI tile — unified across every dashboard ──────────────────────────
+   Existing fd-kpi-* / wd-kpi-* utilities now share these surface
+   tokens (border, radius, shadow, hover) so the visual rhythm is
+   identical across pages even when class names differ. */
+.kpi-card,
+.fd-kpi-card,
+.wd-kpi-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: var(--radius-xl);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.kpi-card:hover,
+.fd-kpi-card:hover,
+.wd-kpi-card:hover {
+  box-shadow: 0 8px 24px -10px rgba(15,23,42,0.14);
+  transform: translateY(-1px);
+}
+
+.kpi-card-body { padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+
+.kpi-card-label,
+.fd-kpi-label,
+.wd-kpi-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #94a3b8;
+}
+
+.kpi-card-value,
+.fd-kpi-value,
+.wd-kpi-value {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+  line-height: 1.1;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+.kpi-card-meta,
+.fd-kpi-meta,
+.wd-kpi-meta {
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
+.kpi-card-icon,
+.wd-kpi-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Semantic tints for KPI icon containers — also used as standalone
+   utility classes for any chip/bubble that wants a consistent palette. */
+.tint-blue,    .wd-kpi-icon--blue    { background: #dbeafe; color: #1d4ed8; }
+.tint-amber,   .wd-kpi-icon--amber   { background: #fef3c7; color: #b45309; }
+.tint-green,   .wd-kpi-icon--green   { background: #dcfce7; color: #15803d; }
+.tint-teal,    .wd-kpi-icon--teal    { background: #ccfbf1; color: #0f766e; }
+.tint-rose                           { background: #ffe4e6; color: #be123c; }
+.tint-violet                         { background: #ede9fe; color: #6d28d9; }
+.tint-honey                          { background: var(--accent-honey-100); color: var(--accent-honey-700); }
+.tint-error                          { background: #fee2e2; color: #b91c1c; }
+
+/* Border-top accent for KPI cards (status emphasis without inline styles). */
+.kpi-card--accent-error  { border-top: 3px solid var(--error); }
+.kpi-card--accent-warn   { border-top: 3px solid var(--warning); }
+.kpi-card--accent-ok     { border-top: 3px solid var(--success); }
+.kpi-card--accent-honey  { border-top: 3px solid var(--accent-honey-500); }
+
+
+/* ── Generic modal description bar (replaces the warehouse-coupled
+      `wd-modal-desc`; both class names continue to render identically) */
+.cds-modal-desc, .wd-modal-desc, .fd-modal-desc {
+  font-size: 0.9375rem;
+  color: #334155;
+  line-height: 1.65;
+  background: linear-gradient(90deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  padding: 0.75rem 0.875rem;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Verify-Location Step — used by farmer onboarding and any other
+   GPS / geofence verification UX. Designed to match dashboard cards.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.vloc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 1.5rem 1.25rem;
+  border-radius: var(--radius-xl);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+}
+
+.vloc-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.vloc-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-lg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
+  color: #1d4ed8;
+  border: 1px solid #c7d2fe;
+}
+
+.vloc-title { font-size: 1rem; font-weight: 700; color: #0f172a; line-height: 1.25; }
+.vloc-sub   { font-size: 0.8125rem; color: #64748b; }
+
+/* ── Centered hero variant — used by the onboarding "verify location"
+      step where the card stands alone in a single-column wizard and
+      should sit visually centered, not left-aligned. ──────────────── */
+.vloc--centered {
+  text-align: center;
+  align-items: center;
+  padding: 1.75rem 1.25rem;
+  gap: 1rem;
+}
+.vloc--centered .vloc-head {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.625rem;
+}
+.vloc--centered .vloc-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-xl);
+}
+.vloc--centered .vloc-title { font-size: 1.0625rem; }
+.vloc--centered .vloc-sub   { max-width: 38ch; margin-inline: auto; }
+.vloc--centered .vloc-status,
+.vloc--centered .vloc-coords { width: 100%; }
+.vloc--centered .vloc-status { justify-content: center; }
+.vloc--centered .vloc-actions { justify-content: center; width: 100%; }
+.vloc--centered .vloc-help    { max-width: 44ch; margin-inline: auto; }
+
+.vloc-status {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  background: #f8fafc;
+  color: #475569;
+  letter-spacing: 0.01em;
+}
+
+.vloc-status[data-state="acquiring"] { background: #fffbeb; color: #92400e; border-color: #fcd34d; }
+.vloc-status[data-state="ok"]        { background: #f0fdf4; color: #166534; border-color: #86efac; }
+.vloc-status[data-state="error"]     { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+
+.vloc-coords {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.625rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: var(--radius-md);
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.vloc-coord-label {
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 0.15rem;
+  display: block;
+}
+
+.vloc-coord-value {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: 0.02em;
+}
+
+.vloc-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+.vloc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  /* WCAG 2.5.5 minimum target size: 44×44 CSS pixels. */
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.65rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 700;
+  font-family: var(--font-primary);
+  line-height: 1;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
+}
+
+.vloc-btn--primary {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+  box-shadow: 0 4px 12px -4px rgba(37,99,235,0.4);
+}
+.vloc-btn--primary:hover:not(:disabled) { background: #1d4ed8; border-color: #1d4ed8; }
+
+.vloc-btn--ghost {
+  background: #ffffff;
+  color: #1e293b;
+  border-color: #cbd5e1;
+}
+.vloc-btn--ghost:hover { background: #f8fafc; border-color: #94a3b8; }
+
+/* Full-width variant — replaces the inline width:100% / padding overrides
+   that used to live in TSX. */
+.vloc-btn--block {
+  width: 100%;
+}
+
+.vloc-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.vloc-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.vloc-help {
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.vloc-help--error { color: #b91c1c; }
+
+/* Status dot — replaces the inline shadow/background style soup. */
+.vloc-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+.vloc-status-dot--ok        { background: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,0.18); }
+.vloc-status-dot--error     { background: #dc2626; box-shadow: 0 0 0 3px rgba(220,38,38,0.18); }
+.vloc-status-dot--acquiring { background: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,0.18); }
+
+
+/* ── Onboarding step helpers — keep typography on the token scale ────── */
+.onboard-step-intro       { display: flex; flex-direction: column; }
+.onboard-step-lede        { font-size: 0.9375rem; line-height: 1.55; color: #475569; }
+.onboard-upload-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-radius: var(--radius-lg);
+  border: 1px dashed #cbd5e1;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.onboard-success-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: var(--radius-xl);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  background: linear-gradient(135deg, #16a34a 0%, #047857 100%);
+  box-shadow: 0 12px 36px -10px rgba(22,163,74,0.45);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Carbon Tag presets — reduce the !rounded-md … text-[10px] !important spam
+   spread across many call sites by giving the same look to ANY tag dropped
+   inside a card with this class.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.tag-flat .cds--tag {
+  border-radius: var(--radius-sm) !important;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.625rem !important;
+  border: none;
+}
+
+/* ── Motion safety — honour OS-level reduced-motion preference ──────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .pulse-primary,
+  .live-pulse::before,
+  .countdown.ending,
+  .fd-geo-dot--live { animation: none !important; }
+  .elevation-premium:hover { transform: none !important; }
+  .listing-card:hover { transform: none !important; }
+}
+

@@ -33,14 +33,16 @@ function withCors(req: NextRequest, res: NextResponse): NextResponse {
 
 
 // ── RBAC ──────────────────────────────────────────────────────────────────────
+// `/dashboard/marketplace` is shared across all operational roles; each role still
+// only sees views and actions appropriate to itself, enforced at the API layer.
 const ROLE_PATHS: Record<string, string[]> = {
-  farmer:     ['/dashboard/farmer'],
-  warehouse:  ['/dashboard/warehouse'],
+  farmer:     ['/dashboard/farmer', '/dashboard/marketplace'],
+  warehouse:  ['/dashboard/warehouse', '/dashboard/marketplace'],
   lab:        ['/dashboard/lab'],
-  officer:    ['/dashboard/officer'],
-  enterprise: ['/dashboard/enterprise'],
-  consumer:   ['/dashboard/consumer'],
-  secretary:  ['/dashboard/secretary'],
+  officer:    ['/dashboard/officer', '/dashboard/marketplace'],
+  enterprise: ['/dashboard/enterprise', '/dashboard/marketplace'],
+  consumer:   ['/dashboard/consumer', '/dashboard/marketplace'],
+  secretary:  ['/dashboard/secretary', '/dashboard/marketplace'],
   admin:      ['/dashboard'],
 };
 

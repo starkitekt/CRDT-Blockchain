@@ -186,12 +186,12 @@ export default function OfficerDashboard() {
           <p className="wd-kpi-value">{fieldAuditCount}</p>
           <p className="wd-kpi-meta wd-kpi-delta--warn">{tDashboard('site_visit_needed')}</p>
         </div>
-        <div className="wd-kpi-card" style={{ borderTop: '3px solid #dc2626' }}>
+        <div className="wd-kpi-card kpi-card--accent-error">
           <div className="wd-kpi-top">
-            <span className="wd-kpi-label" style={{ color: '#dc2626' }}>{tDashboard('flagged_batches')}</span>
-            <div className="wd-kpi-icon" style={{ background: '#fee2e2', color: '#dc2626' }}><CloseFilled size={18} /></div>
+            <span className="wd-kpi-label" style={{ color: 'var(--error)' }}>{tDashboard('flagged_batches')}</span>
+            <div className="wd-kpi-icon tint-error"><CloseFilled size={18} /></div>
           </div>
-          <p className="wd-kpi-value" style={{ color: '#dc2626' }}>{flaggedCount}</p>
+          <p className="wd-kpi-value" style={{ color: 'var(--error)' }}>{flaggedCount}</p>
           <p className="wd-kpi-meta wd-kpi-delta--error">Requires action</p>
         </div>
       </div>
