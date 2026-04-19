@@ -18,7 +18,7 @@ import IdentityVerificationModal from '@/components/Onboarding/IdentityVerificat
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
 import { useBatches } from '@/hooks/useBatches';
 import { batchesApi, ApiError } from '@/lib/api';
-import CopyableValue from '@/components/CopyableValue';
+import OnChainTxLink from '@/components/Blockchain/OnChainTxLink';
 
 const STATUS_META: Record<string, { label: string; type: 'green' | 'blue' | 'purple' | 'red' | 'gray' }> = {
   in_warehouse: { label: 'In Warehouse', type: 'green' },
@@ -331,10 +331,11 @@ export default function WarehouseDashboard() {
                           <td><span className="wd-date">{b.createdAt ? b.createdAt.slice(0, 10) : '—'}</span></td>
                           <td>
                             {b.onChainTxHash ? (
-                              <span className="wd-tx-hash">
-                                <span className="wd-tx-text">{b.onChainTxHash}</span>
-                                <CopyableValue value={b.onChainTxHash} label="Copy" className="min-h-0 h-6 px-1" />
-                              </span>
+                              <OnChainTxLink
+                                txHash={b.onChainTxHash}
+                                label="Anchor"
+                                compact
+                              />
                             ) : (
                               <span className="wd-tx-pending">Pending</span>
                             )}

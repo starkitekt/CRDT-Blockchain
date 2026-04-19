@@ -18,7 +18,7 @@ import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
 import BlockchainCertificate from '@/components/Traceability/BlockchainCertificate';
 import CTETimeline, { CTEEvent } from '@/components/Traceability/CTETimeline';
 import { batchesApi, labApi, ApiError } from '@/lib/api';
-import CopyableValue from '@/components/CopyableValue';
+import OnChainTxLink from '@/components/Blockchain/OnChainTxLink';
 import type { Batch, LabResult } from '@/types';
 
 type TFn = (...args: unknown[]) => string;
@@ -314,9 +314,12 @@ export default function ConsumerPortal() {
               </div>
               {batchData.onChainTxHash && (
                 <div className="mt-spacing-md p-spacing-md bg-teal-50 border border-teal-100 rounded-xl">
-                  <p className="text-[10px] font-bold text-teal-700 uppercase tracking-widest mb-2">On-Chain Transaction Hash</p>
-                  <p className="font-mono text-xs break-all text-teal-800">{batchData.onChainTxHash}</p>
-                  <CopyableValue value={batchData.onChainTxHash} label="Copy Full Hash" className="mt-2 min-h-0 h-7 px-2 text-teal-700" />
+                  <p className="text-eyebrow text-teal-700 mb-2">On-chain proof of authenticity</p>
+                  <OnChainTxLink
+                    txHash={batchData.onChainTxHash}
+                    label="Anchor tx"
+                    prefetchDetails
+                  />
                 </div>
               )}
             </Tile>

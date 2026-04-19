@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
         conformanceStatus: 'NON_CONFORMANT',
       }, { status: 422 });
     }
+    console.error('[POST /api/lab] unexpected error:', err);
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 }

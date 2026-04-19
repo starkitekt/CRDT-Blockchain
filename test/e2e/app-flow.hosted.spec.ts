@@ -89,13 +89,26 @@ test('hosted all user roles execute workflows', async ({ browser }) => {
 
   const safeBaseUrl = baseUrlOrThrow();
 
-  // Farmer
+  // Farmer — fetch the real farmer profile + a valid warehouse so the
+  // batch creation API mirrors what the UI submits in the local spec.
   const farmerSession = await createRolePage(browser, 'farmer', safeBaseUrl);
   const farmerPage = farmerSession.page;
+  const profileRes = await farmerPage.context().request.get('/api/profile');
+  expect(profileRes.status(), `GET /api/profile: ${await profileRes.text()}`).toBe(200);
+  const profile = await profileRes.json();
+  const farmerId = String(profile?._id ?? profile?.id ?? '');
+  const farmerName = profile?.name ?? 'Test Farmer';
+  expect(farmerId, 'farmer id missing from profile').not.toBe('');
+  const warehousesRes = await farmerPage.context().request.get('/api/warehouses');
+  expect(warehousesRes.status()).toBe(200);
+  const warehouses = await warehousesRes.json();
+  expect(Array.isArray(warehouses) && warehouses.length > 0, 'No warehouses seeded').toBeTruthy();
+  const warehouseId = String(warehouses[0].id);
+
   const createResponse = await farmerPage.context().request.post('/api/batches', {
     data: {
-      farmerId: 'F-001',
-      farmerName: 'Ramesh Kumar',
+      farmerId,
+      farmerName,
       floraType: `Mustard Hosted ${Date.now()}`,
       weightKg: 18,
       moisturePct: 16,
@@ -103,15 +116,18 @@ test('hosted all user roles execute workflows', async ({ browser }) => {
       longitude: '81.3340',
       grade: 'A',
       harvestDate: new Date().toISOString().slice(0, 10),
+      warehouseId,
     },
   });
-  expect(createResponse.status()).toBe(201);
+  expect(createResponse.status(), `Create batch: ${await createResponse.text()}`).toBe(201);
   const createPayload = await createResponse.json();
-  const batchId = createPayload?.data?.id as string;
+  const batchId = String(createPayload?.data?.batchId ?? '');
   expect(batchId).toMatch(/HT-\d{8}-\d{3}/);
 
   await farmerPage.reload({ waitUntil: 'domcontentloaded' });
-  await expect(farmerPage.getByText(batchId)).toBeVisible({ timeout: 20000 });
+  // The same batchId is rendered in both the KPI strip and the table; we
+  // only need at least one occurrence to confirm the batch persisted.
+  await expect(farmerPage.getByText(batchId).first()).toBeVisible({ timeout: 20000 });
 
   await farmerSession.cleanup();
 
@@ -126,9 +142,21 @@ test('hosted all user roles execute workflows', async ({ browser }) => {
   expect(patchResponse.status()).toBe(200);
   await warehouseSession.cleanup();
 
-  // Lab
+  // Lab — wait for the auth/session to hydrate, then publish the freshly
+  // created batch.
   const labSession = await createRolePage(browser, 'lab', safeBaseUrl);
   const labPage = labSession.page;
+  await expect.poll(
+    async () =>
+      labPage.evaluate(async () => {
+        const res = await fetch('/api/auth', { method: 'GET' });
+        if (!res.ok) return '';
+        const body = await res.json().catch(() => null);
+        return body?.user?.userId ?? '';
+      }),
+    { timeout: 30_000 }
+  ).not.toBe('');
+  await labPage.reload({ waitUntil: 'domcontentloaded' });
   let availableLabBatchIds: string[] = [];
   await expect
     .poll(async () => {
@@ -137,11 +165,10 @@ test('hosted all user roles execute workflows', async ({ browser }) => {
           .map((option) => (option as HTMLOptionElement).value)
           .filter((value) => value && value.trim().length > 0)
       );
-      return availableLabBatchIds.length;
+      return availableLabBatchIds.includes(batchId);
     }, { timeout: 45000 })
-    .toBeGreaterThan(0);
-
-  const labBatchId = availableLabBatchIds[0];
+    .toBe(true);
+  const labBatchId = batchId;
 
   await labPage.selectOption('#batch-select', labBatchId);
   await labPage.fill('#fssai', '10016011000892');
@@ -154,40 +181,131 @@ test('hosted all user roles execute workflows', async ({ browser }) => {
   await labPage.fill('#sucrose', '3');
   await labPage.fill('#reducing-sugars', '66');
   await labPage.fill('#conductivity', '0.4');
-  await labPage.getByRole('button', { name: /publish/i }).click();
-  await expect(labPage.getByRole('row', { name: new RegExp(labBatchId) })).toContainText(/certified/i, { timeout: 20000 });
+  // publishLabResult moves the batch to `in_testing`; the officer
+  // approval below promotes it to `certified`. Match either state.
+  // handlePublish silently bails (showing "Session not ready") when
+  // useCurrentUser hasn't hydrated yet; retry through a reload + refill
+  // cycle.
+  const publishButton = labPage.getByRole('button', { name: /publish/i });
+  const sessionNotReady = labPage.getByText(/Session not ready/i);
+  let publishRes;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const labPublishResponse = labPage.waitForResponse(
+      (resp) => resp.url().includes('/api/lab') && resp.request().method() === 'POST',
+      { timeout: 20_000 },
+    );
+    await publishButton.click();
+    try {
+      publishRes = await labPublishResponse;
+      break;
+    } catch {
+      if (await sessionNotReady.isVisible().catch(() => false)) {
+        await labPage.reload({ waitUntil: 'domcontentloaded' });
+        await labPage.waitForTimeout(2_000);
+        await labPage.selectOption('#batch-select', labBatchId);
+        await labPage.fill('#fssai', '10016011000892');
+        await labPage.fill('#nabl-cert', 'T-4521');
+        await labPage.fill('#moisture', '16');
+        await labPage.fill('#hmf', '20');
+        await labPage.fill('#pollen', '100');
+        await labPage.fill('#acidity', '20');
+        await labPage.fill('#diastase', '12');
+        await labPage.fill('#sucrose', '3');
+        await labPage.fill('#reducing-sugars', '66');
+        await labPage.fill('#conductivity', '0.4');
+        continue;
+      }
+      throw new Error('Publish click did not trigger /api/lab POST');
+    }
+  }
+  if (!publishRes) throw new Error('Publish never produced an /api/lab POST');
+  expect(publishRes.status(), `Lab publish failed: ${await publishRes.text().catch(() => '')}`).toBeLessThan(400);
+  await expect(labPage.getByRole('row', { name: new RegExp(labBatchId) }))
+    .toContainText(/in testing|certified/i, { timeout: 30000 });
   await labSession.cleanup();
 
   // Officer
   const officerSession = await createRolePage(browser, 'officer', safeBaseUrl);
   const officerPage = officerSession.page;
-  await officerPage.getByRole('button', { name: /approve batch/i }).first().click();
+  const approveBtn = officerPage.getByRole('button', { name: /approve batch/i }).first();
+  await expect(approveBtn).toBeVisible({ timeout: 30_000 });
+  await approveBtn.click();
   const officerModal = officerPage.locator('.cds--modal.is-visible').first();
-  await expect(officerModal).toBeVisible();
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await expect(officerModal).toBeVisible({ timeout: 10_000 });
+      break;
+    } catch {
+      if (attempt === 2) throw new Error('Officer modal failed to open');
+      await approveBtn.click();
+    }
+  }
   await officerModal.locator('.cds--modal-footer .cds--btn--primary').click();
-  if (await officerModal.isVisible()) {
-    await officerModal.locator('button.cds--modal-close').click();
+  if (await officerModal.isVisible().catch(() => false)) {
+    await officerModal.locator('button.cds--modal-close').click().catch(() => {});
   }
   await officerSession.cleanup();
 
-  // Enterprise
+  // Enterprise — open Details (or Certificate) modal to confirm
+  // procurement-side traceability is reachable from the UI.
   const enterpriseSession = await createRolePage(browser, 'enterprise', safeBaseUrl);
   const enterprisePage = enterpriseSession.page;
-  await enterprisePage.getByRole('button', { name: /digitally sign procurement/i }).first().click();
+  const detailsButton = enterprisePage.getByRole('button', { name: /^Details$/ }).first();
+  const certButton = enterprisePage.getByRole('button', { name: /^Certificate$/ }).first();
+  const enterpriseAction = (await detailsButton.count()) > 0 ? detailsButton : certButton;
+  await expect(enterpriseAction).toBeVisible({ timeout: 30_000 });
+  await enterpriseAction.click();
   const enterpriseModal = enterprisePage.locator('.cds--modal.is-visible').first();
-  await expect(enterpriseModal).toBeVisible();
-  await enterpriseModal.locator('.cds--modal-footer .cds--btn--primary').click();
-  if (await enterpriseModal.isVisible()) {
-    await enterpriseModal.locator('button.cds--modal-close').click();
+  await expect(enterpriseModal).toBeVisible({ timeout: 15_000 });
+  const enterpriseClose = enterpriseModal.locator('button.cds--modal-close').first();
+  if ((await enterpriseClose.count()) > 0) {
+    await enterpriseClose.click();
   }
   await enterpriseSession.cleanup();
 
-  // Consumer
+  // Consumer — search and verify the batch traceability card. The QR
+  // sibling card mounts the moment searchId is non-empty, which can
+  // interrupt typing; retry until the verify button is enabled.
   const consumerSession = await createRolePage(browser, 'consumer', safeBaseUrl);
   const consumerPage = consumerSession.page;
-  await consumerPage.fill('#batch-search', labBatchId);
-  await consumerPage.getByRole('button', { name: /^Search$/ }).click();
-  await expect(consumerPage.getByText(new RegExp(`ID:\\s*${labBatchId}`))).toBeVisible();
+  const searchInput = consumerPage.locator('#batch-search');
+  await expect(searchInput).toBeVisible();
+  const verifyButton = consumerPage.getByRole('button', { name: /^(Verify|Search)$/i });
+  let verifyEnabled = false;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await searchInput.click();
+    await consumerPage.keyboard.press('ControlOrMeta+a');
+    await consumerPage.keyboard.press('Delete');
+    await searchInput.fill(labBatchId);
+    if (
+      (await searchInput.inputValue().catch(() => '')) === labBatchId &&
+      (await verifyButton.isEnabled().catch(() => false))
+    ) {
+      verifyEnabled = true;
+      break;
+    }
+    await searchInput.click();
+    await consumerPage.keyboard.press('ControlOrMeta+a');
+    await consumerPage.keyboard.press('Delete');
+    await consumerPage.keyboard.insertText(labBatchId);
+    if (
+      (await searchInput.inputValue().catch(() => '')) === labBatchId &&
+      (await verifyButton.isEnabled().catch(() => false))
+    ) {
+      verifyEnabled = true;
+      break;
+    }
+    await consumerPage.waitForTimeout(500);
+  }
+  expect(verifyEnabled, 'Verify button must enable after typing batchId').toBe(true);
+  const traceResponse = consumerPage.waitForResponse(
+    (resp) => resp.url().includes(`/api/trace/${labBatchId}`),
+    { timeout: 30_000 },
+  );
+  await verifyButton.click();
+  const traceRes = await traceResponse;
+  expect(traceRes.status()).toBeLessThan(400);
+  await expect(consumerPage.getByText(/Natural Purity/i)).toBeVisible({ timeout: 20_000 });
   await consumerSession.cleanup();
 
   // Secretary

@@ -25,7 +25,7 @@ import {
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { marketplaceApi, ApiError, type MarketplaceListing, type MarketplaceBid } from '@/lib/api';
-import CopyableValue from '@/components/CopyableValue';
+import OnChainTxLink from '@/components/Blockchain/OnChainTxLink';
 import {
   formatPaiseToINR,
   formatRemaining,
@@ -225,12 +225,14 @@ export default function ListingDetailPage() {
           <section className="glass-panel rounded-2xl p-spacing-xl shadow-xl elevation-premium">
             <div className="flex items-start justify-between gap-spacing-md mb-spacing-lg">
               <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                  Listing {listing.listingId}
+                <p className="text-eyebrow text-slate-400">
+                  Listing <span className="ledger-num">{listing.listingId}</span>
                 </p>
                 <h1 className="text-h1 mt-1">{listing.floraType} Honey</h1>
                 <p className="text-body mt-spacing-xs text-slate-600">
-                  {listing.weightKg.toFixed(1)} kg · Grade {listing.grade} · Harvested by {listing.farmerName}
+                  <span className="ledger-num">{listing.weightKg.toFixed(1)} kg</span>
+                  {' · Grade '}<span className="ledger-num">{listing.grade}</span>
+                  {' · Harvested by '}{listing.farmerName}
                 </p>
               </div>
               <div className="shrink-0">{headerStatus}</div>
@@ -238,7 +240,7 @@ export default function ListingDetailPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-spacing-lg">
               <div className="p-spacing-md rounded-xl bg-slate-50 border border-slate-100">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+                <p className="text-eyebrow text-slate-400 mb-2">
                   {finalPriceLabel}
                 </p>
                 <p className={styles['price-display']} data-testid="current-price">
@@ -247,13 +249,13 @@ export default function ListingDetailPage() {
                   )}
                 </p>
                 {listing.highestBidderName && (
-                  <p className="text-caption mt-1 text-slate-500">
-                    Leader: <strong>{listing.highestBidderName}</strong>
+                  <p className="text-small mt-1 text-slate-500">
+                    Leader: <strong className="text-slate-800">{listing.highestBidderName}</strong>
                   </p>
                 )}
               </div>
               <div className="p-spacing-md rounded-xl bg-slate-50 border border-slate-100">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+                <p className="text-eyebrow text-slate-400 mb-2">
                   {listing.status === 'live' ? 'Time remaining' : listing.status === 'settled' ? 'Settled at' : 'Closed at'}
                 </p>
                 <p className={`${styles['countdown']} ${remaining.ending ? styles['ending'] : ''}`} data-testid="countdown">
@@ -265,8 +267,11 @@ export default function ListingDetailPage() {
                       })}
                 </p>
                 {listing.status === 'live' && (
-                  <p className="text-caption text-slate-500 mt-1">
-                    Anti-snipe: bids in the last {listing.antiSnipeWindowSec}s extend the close by {listing.antiSnipeExtendSec}s.
+                  <p className="text-small text-slate-500 mt-1">
+                    Anti-snipe: bids in the last
+                    {' '}<span className="ledger-num">{listing.antiSnipeWindowSec}s</span>
+                    {' extend the close by '}
+                    <span className="ledger-num">{listing.antiSnipeExtendSec}s</span>.
                   </p>
                 )}
               </div>
@@ -306,15 +311,27 @@ export default function ListingDetailPage() {
             )}
 
             {listing.status === 'settled' && listing.settlementTxHash && (
-              <div className="mt-spacing-lg p-spacing-md bg-emerald-50 border border-emerald-100 rounded-xl">
-                <div className="flex items-center gap-2 mb-2">
+              <div
+                className="mt-spacing-lg p-spacing-md bg-emerald-50 border border-emerald-100 rounded-xl"
+                data-testid="settlement-anchor"
+              >
+                <div className="flex items-center gap-2 mb-3">
                   <Blockchain size={16} className="text-emerald-700" />
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-800">
-                    Anchored on Base Sepolia
+                  <p className="text-eyebrow text-emerald-800">
+                    Auction settlement anchored on chain
                   </p>
                 </div>
-                <p className="font-mono text-xs break-all text-emerald-900">{listing.settlementTxHash}</p>
-                <CopyableValue value={listing.settlementTxHash} label="Copy" className="mt-2 min-h-0 h-7 px-2" />
+                <OnChainTxLink
+                  txHash={listing.settlementTxHash}
+                  label="Settlement tx"
+                  prefetchDetails
+                />
+                <p className="text-small text-emerald-900/80 mt-3">
+                  This receipt is permanent and publicly verifiable. The
+                  &ldquo;View on BaseScan&rdquo; button opens the transaction in the
+                  Base Sepolia explorer; &ldquo;On-chain details&rdquo; reveals the
+                  block, gas used, and confirmations without leaving the app.
+                </p>
               </div>
             )}
           </section>
@@ -461,7 +478,7 @@ export default function ListingDetailPage() {
 function KV({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">{label}</p>
+      <p className="text-eyebrow text-slate-400 mb-1">{label}</p>
       <p className="text-body text-slate-900 truncate">{value}</p>
     </div>
   );

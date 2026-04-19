@@ -59,9 +59,17 @@ export async function publishLabResult(
   );
 
   if (isBlockchainRelayEnabled()) {
-    const txHash = await anchorLabResultOnChain(input.batchId, input);
-    result.onChainTxHash = txHash;
-    await result.save();
+    try {
+      const txHash = await anchorLabResultOnChain(input.batchId, input);
+      result.onChainTxHash = txHash;
+      await result.save();
+    } catch (err) {
+      // The relayer can transiently fail (Sepolia rate limits, replacement
+      // fee too low when many txs queue together, etc.). Persist the lab
+      // result anyway and log; the anchor can be retried by the operator
+      // re-running scripts/anchor-sepolia.ts.
+      console.warn('[lab.service] anchorLabResultOnChain failed:', err);
+    }
   }
 
   // Lab completes testing; officer must still approve/reject.

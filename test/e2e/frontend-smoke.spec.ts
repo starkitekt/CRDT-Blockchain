@@ -203,9 +203,11 @@ test.describe('Marketplace UI happy path', () => {
     const submitListing = farmerPage.locator('.cds--modal-footer .cds--btn--primary').filter({ hasText: /open auction/i });
     await submitListing.click();
 
-    // Wait for the freshly-created card to appear in the live grid.
+    // Wait for the freshly-created card to appear in the live grid. The
+    // marketplace page polls every 7s; with a slow webpack dev server the
+    // first cold fetch can take 10–20s, so allow two poll cycles.
     const liveCard = farmerPage.locator('[data-testid="listing-card"]').filter({ hasText: floraType }).first();
-    await expect(liveCard).toBeVisible({ timeout: 30_000 });
+    await expect(liveCard).toBeVisible({ timeout: 60_000 });
     await expect(liveCard).toContainText(/MK-\d{8}-\d{3}/);
     const listingId = (await liveCard.locator('p').first().textContent())?.trim() ?? '';
     expect(listingId).toMatch(/^MK-\d{8}-\d{3}$/);

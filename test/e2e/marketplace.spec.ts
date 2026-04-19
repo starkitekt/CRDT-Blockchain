@@ -154,7 +154,11 @@ test.describe('Marketplace', () => {
     // Carbon Tabs renders every TabPanel in the DOM, so the same listing
     // can appear in multiple panels. We only need the visible one.
     const farmerCard = farmerPage.locator(`[data-listing-id="${listingId}"]`).first();
-    await expect(farmerCard).toBeVisible({ timeout: 20_000 });
+    // The marketplace page polls every 7s. On the slow webpack dev server,
+    // the first listing fetch can take 10–20s, so the brand-new listing
+    // may not appear until the second poll cycle. Give it one full cycle
+    // of headroom.
+    await expect(farmerCard).toBeVisible({ timeout: 60_000 });
     await expect(farmerCard).toContainText(listingId);
     await expect(farmerCard).toContainText(/Eucalyptus/);
 

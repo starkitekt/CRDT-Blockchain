@@ -3,7 +3,116 @@
 > Generated: 2026-04-05 Â· Last updated: 2026-04-09 (patch round 4) Â· Audited against every file in `src/` and `scripts/`.
 
 ---
-## 0a. Latest Patch (2026-04-17) — Unified UI + On-Chain Anchoring Fix
+## 0. Latest Patch (2026-04-17 PM) — Typography v3, On-Chain UI, Rich Seed + Sepolia Re-Anchor
+
+This patch focuses on three independently shippable improvements plus a
+hardened test matrix.
+
+### Typography v3 — Plus Jakarta Sans + DM Mono (global)
+
+- Both families are loaded via `next/font/google` from
+  `src/app/[locale]/layout.tsx` and exposed as CSS variables on `<html>`
+  (`--font-primary`, `--font-numeric`).
+- `src/app/globals.css` redefines:
+  - global rules: 12pt minimum, `--tracking-heading: -0.06em`,
+    `--tracking-body: 0em`, `font-variant-numeric: tabular-nums` on
+    numerics;
+  - heading styles `h1..h4` mapped onto the new family + kerning;
+  - utility classes for the full scale (`.text-h1/h2/h3`,
+    `.text-body-lg/body/small`, `.mono-data`, `.num`, `.ledger-num`).
+- Marketplace component CSS
+  (`src/components/Marketplace/marketplace.module.css`) consumes
+  `var(--font-mono)` for `.price-display` + `.countdown` and
+  `var(--font-primary)` for `.closed-date`.
+- `ListingCard.tsx` was migrated off legacy classes onto
+  `.text-eyebrow` / `.text-small` / `.ledger-num` so every numeric field
+  on a card is DM Mono and everything is ≥ 12pt.
+
+### On-Chain UI — `OnChainTxLink` + `/api/onchain/tx/[hash]`
+
+A single component now renders every transaction hash across the app:
+
+- `src/lib/explorer.ts` — chain-aware URL builders
+  (`explorerTxUrl`, `explorerAddressUrl`, `networkLabel`, `shortHash`)
+  with a `DEFAULT_CHAIN_ID = 84532`. Supports Base Sepolia, Base
+  mainnet (placeholder), and Hardhat (returns null — no public
+  explorer).
+- `src/app/api/onchain/tx/[hash]/route.ts` — new dynamic API route. Uses
+  ethers v6 (`JsonRpcProvider(BASE_SEPOLIA_RPC_URL)`) to fetch the
+  receipt + block and return `{ blockNumber, status, gasUsed,
+  confirmations, timestamp }`. Validates hash shape before any RPC
+  call.
+- `src/components/Blockchain/OnChainTxLink.tsx` — new reusable
+  component:
+  - truncated mono hash + copy button + "View on BaseScan" link;
+  - expandable detail panel that fetches `/api/onchain/tx/[hash]`;
+  - props: `compact` (single-line, used in tables) and
+    `prefetchDetails` (auto-expand on mount, used in modals /
+    certificates).
+- Migrated surfaces (replacing `CopyableValue` for tx hashes):
+  - `farmer/page.tsx`, `warehouse/page.tsx`, `admin/page.tsx`,
+    `lab/page.tsx`, `officer/page.tsx` → compact mode;
+  - `enterprise/page.tsx`, `consumer/page.tsx`,
+    `BlockchainCertificate.tsx`,
+    `marketplace/[listingId]/page.tsx` → full mode + `prefetchDetails`.
+- The lab dashboard also now displays `b.batchId` (human-readable) in
+  the Lab queue table instead of the Mongo `_id`.
+
+### Rich Seed + Sepolia Re-Anchor Pipeline
+
+Two new tsx scripts plus three new npm scripts in `package.json`:
+
+| Script | Purpose |
+|--------|---------|
+| `seed:rich` (`scripts/seed-rich.ts`) | Wipes the target Mongo DB and writes one-of-each-role users plus batches in every status, lab results (pass + fail), recalls, marketplace listings (live/settled/unsold), bid histories and notifications |
+| `sepolia:anchor` (`scripts/anchor-sepolia.ts`) | Walks seeded data and anchors each lifecycle event on the existing Base Sepolia contract `0x2D85…D8b6`. Idempotent: skips writes if the contract already holds an identical hash for that staged id (`<batchId>#<status>` for batches, listing id for settlements) |
+| `sepolia:reseed` | Convenience: `seed:rich` then `sepolia:anchor` |
+
+### Robustness Fixes
+
+- `src/lib/services/lab.service.ts`:
+  `anchorLabResultOnChain(...)` is now wrapped in a `try/catch` so
+  transient relayer issues (Sepolia rate-limits, `REPLACEMENT_UNDERPRICED`
+  nonce conflicts) emit a warning instead of failing the whole
+  `publishLabResult` call. The DB write still succeeds; the on-chain
+  anchor can be retried by a follow-up call to `sepolia:anchor`.
+- `src/app/api/lab/route.ts`: the catch-all in `POST /api/lab` now
+  `console.error`s the offending payload + error so we no longer get
+  bare `400 Invalid request body` responses with no context.
+
+### Tests — current matrix
+
+| Suite | Result | Notes |
+|-------|--------|-------|
+| `npx hardhat test` | **9 / 9 pass** | batch records, lab linkage, recalls, marketplace settlement happy + replay + idempotency + auth |
+| `npx vitest run` | **25 / 25 pass** | adds `test/unit/explorer.test.ts` (12 tests) covering URL building, network labels, `shortHash` edges |
+| `app-flow.spec.ts` (local) | pass | full 6-role flow under `next dev` |
+| `app-flow.hosted.spec.ts` | pass (~1.5 min) | same flow against a hosted deployment |
+| `marketplace.spec.ts` | pass | listing → bid → settlement |
+| `frontend-smoke.spec.ts` | pass | dashboards render under cold dev compile |
+
+Playwright reliability patterns now baked into the suites (worth
+preserving — they were debugged the hard way):
+
+- `playwright.config.ts`: `timeout: 600_000`, `expect.timeout: 30_000`,
+  `actionTimeout: 60_000`, `navigationTimeout: 120_000` (Next dev
+  compiles routes on demand).
+- Modal queries use `page.locator('.cds--modal.is-visible')` because
+  Carbon keeps inert hidden modals in the DOM that match
+  `getByRole('dialog')`.
+- Carbon `TextInput` controlled inputs need a retry loop alternating
+  `locator.fill()` + `keyboard.insertText()` and re-checking
+  `inputValue()` + `button.isEnabled()` before proceeding (used in the
+  consumer search and warehouse intake steps).
+- Lab publish must poll `/api/auth` from `page.evaluate` until
+  `currentUser.userId` hydrates, then `page.reload()` to force
+  `useCurrentUser` to refetch with a fresh session before clicking the
+  submit button.
+- Geolocation permission is granted unconditionally for the farmer
+  step.
+
+---
+## 0a. Earlier Patch (2026-04-17 AM) — Unified UI + On-Chain Anchoring Fix
 
 ### UI: Unified Design System v2
 

@@ -38,7 +38,7 @@ import { batchesApi, warehousesApi, ApiError, type WarehouseOption } from '@/lib
 import GuidedTour from '@/components/Onboarding/GuidedTour';
 import SimplifiedFarmerOnboarding from '@/components/Onboarding/SimplifiedFarmerOnboarding';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
-import CopyableValue from '@/components/CopyableValue';
+import OnChainTxLink from '@/components/Blockchain/OnChainTxLink';
 
 /* ── Status helpers ─────────────────────────────────────────────────────── */
 const STATUS_META: Record<string, { label: string; type: 'green' | 'blue' | 'purple' | 'red' | 'gray' }> = {
@@ -731,10 +731,11 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
                       </td>
                       <td>
                         {batch.onChainTxHash ? (
-                          <span className="fd-tx-hash">
-                            <span className="fd-tx-hash-text">{batch.onChainTxHash}</span>
-                            <CopyableValue value={batch.onChainTxHash} label="Copy" className="min-h-0 h-6 px-1" />
-                          </span>
+                          <OnChainTxLink
+                            txHash={batch.onChainTxHash}
+                            label="Anchor"
+                            compact
+                          />
                         ) : (
                           <span className="fd-tx-pending">Pending</span>
                         )}

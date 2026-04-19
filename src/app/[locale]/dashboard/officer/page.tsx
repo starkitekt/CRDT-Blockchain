@@ -32,6 +32,7 @@ import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayo
 import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
 import RecallManagementModal from '@/components/Traceability/RecallManagementModal';
 import CopyableValue from '@/components/CopyableValue';
+import OnChainTxLink from '@/components/Blockchain/OnChainTxLink';
 
 export default function OfficerDashboard() {
   const currentUser = useCurrentUser();
@@ -384,11 +385,17 @@ export default function OfficerDashboard() {
                   timestamp: signTimestamp,
                 }, null, 2)}
               </div>
-              <CopyableValue
-                value={comparisonBatch?.onChainTxHash || comparisonBatch?.onChainDataHash || '--'}
-                label="Copy Hash"
-                className="text-primary mt-3 min-h-0 h-7 px-2"
-              />
+              {comparisonBatch?.onChainTxHash ? (
+                <div className="mt-3">
+                  <OnChainTxLink txHash={comparisonBatch.onChainTxHash} label="Anchor" />
+                </div>
+              ) : (
+                <CopyableValue
+                  value={comparisonBatch?.onChainDataHash || '--'}
+                  label="Copy Hash"
+                  className="text-primary mt-3 min-h-0 h-7 px-2"
+                />
+              )}
             </div>
             <Stack gap={4}>
               <Button size="lg" kind="primary" renderIcon={CheckmarkFilled} className="w-full !max-w-none h-14 !rounded-xl shadow-2xl" onClick={() => { if (comparisonBatch) { setActionBatch(comparisonBatch.batchId); setConfirmAction('approve'); } }}>

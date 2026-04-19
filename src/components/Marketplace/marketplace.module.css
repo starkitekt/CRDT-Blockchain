@@ -73,16 +73,15 @@
   background: linear-gradient(90deg, #94a3b8 0%, #64748b 100%);
 }
 
+/* Price display — DM Mono (ledger feel) per typography spec. */
 .price-display {
-  font-family: "JetBrains Mono", "Fira Code", monospace;
-  font-weight: 700;
-  font-size: 1.375rem;
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1, "lnum" 1, "zero" 1;
+  font-weight: 500;
+  font-size: 1.375rem;       /* 22px on mobile */
   line-height: 1.15;
   color: #0f172a;
-  letter-spacing: -0.02em;
-  font-feature-settings: "tnum" 1, "lnum" 1;
-  /* Allow long amounts (e.g. ₹1,12,000.00) to break gracefully instead
-     of clipping under .listing-card { overflow:hidden }. */
+  letter-spacing: 0;          /* numerics: 0% kerning, mono is already tight */
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -112,25 +111,27 @@
   background: rgba(15, 23, 42, 0.02);
 }
 
+/* Auction countdown — DM Mono (timer feel) with tabular lining so the
+   colon-delimited HH:MM:SS columns don't reflow each second. */
 .countdown {
-  font-family: "JetBrains Mono", monospace;
-  font-weight: 700;
-  font-size: 1.25rem;
-  letter-spacing: 0.04em;
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1, "lnum" 1, "zero" 1;
+  font-weight: 500;
+  font-size: 1.125rem;
+  letter-spacing: 0;
   color: #0f172a;
   line-height: 1.2;
-  font-feature-settings: "tnum" 1, "lnum" 1;
 }
 
 /* Closed/settled/unsold listings show a date instead of a live timer.
-   Render dates at body weight so they don't overpower the price column. */
+   Render at body weight so they don't overpower the price column. */
 .closed-date {
   font-family: var(--font-primary);
   font-weight: 600;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;       /* 14px = 14pt body standard */
   color: #334155;
   line-height: 1.3;
-  letter-spacing: 0;
+  letter-spacing: var(--tracking-body, 0);
 }
 
 .countdown.ending {

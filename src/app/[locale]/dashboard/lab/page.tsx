@@ -33,6 +33,7 @@ import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayo
 import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
 import EmptyState from '@/components/EmptyState';
 import CopyableValue from '@/components/CopyableValue';
+import OnChainTxLink from '@/components/Blockchain/OnChainTxLink';
 
 interface LabFormValues {
   moisture: string;
@@ -102,13 +103,14 @@ export default function LabDashboard() {
   // Derive queue rows from real batch data
   const queueRows = pendingBatches.map(b => ({
     id:       b.id,
+    batchId:  b.batchId,
     batch:    `${b.floraType} — ${b.farmerName}`,
     status:   b.status.replace(/_/g, ' '),
     received: b.harvestDate,
   }));
 
   const queueHeaders = [
-    { key: 'id',       header: tDashboard('labId') },
+    { key: 'batchId',  header: tDashboard('labId') },
     { key: 'batch',    header: tDashboard('sampleBatch') },
     { key: 'status',   header: tDashboard('status') },
     { key: 'received', header: tDashboard('received') },
@@ -403,15 +405,30 @@ export default function LabDashboard() {
               <div className="flex justify-between items-start mb-spacing-xl">
                 <div>
                   <h4 className="text-h2 !text-white !tracking-normal">{tDashboard('certOfPurity')}</h4>
-                  <div className="flex items-center gap-2 mt-2">
-                    <p className="text-[10px] text-primary font-mono tracking-[0.1em] break-all">
-                      {tDashboard('hash')}: {(() => { const b = pendingBatches.find(x => x.batchId === selectedBatchId || x.id === selectedBatchId); return b?.onChainTxHash || b?.onChainDataHash || '--'; })()}
-                    </p>
-                    <CopyableValue
-                      value={(() => { const b = pendingBatches.find(x => x.batchId === selectedBatchId || x.id === selectedBatchId); return b?.onChainTxHash || b?.onChainDataHash || '--'; })()}
-                      label="Copy Hash"
-                      className="text-primary min-h-0 h-6 px-2"
-                    />
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    {(() => {
+                      const b = pendingBatches.find(x => x.batchId === selectedBatchId || x.id === selectedBatchId);
+                      const hash = b?.onChainTxHash;
+                      return (
+                        <>
+                          <p className="text-eyebrow text-primary ledger-num break-all">
+                            {tDashboard('hash')}: {hash || b?.onChainDataHash || '--'}
+                          </p>
+                          {hash && (
+                            <div className="ml-auto">
+                              <OnChainTxLink txHash={hash} label="Anchor" compact />
+                            </div>
+                          )}
+                          {!hash && b?.onChainDataHash && (
+                            <CopyableValue
+                              value={b.onChainDataHash}
+                              label="Copy Hash"
+                              className="text-primary min-h-0 h-6 px-2"
+                            />
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
                 <Tag type="green" className="!bg-success !text-white !rounded-md font-bold border-none px-4 py-2 ring-4 ring-success/20">{tDashboard('nablCompliant')}</Tag>

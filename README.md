@@ -182,7 +182,10 @@ npm run dev
 | `npm run build` | Production build |
 | `npm run start` | Run production server |
 | `npm run lint` | ESLint |
-| `npm run seed` | Reset/seed local database |
+| `npm run seed` | Reset/seed local database (minimal fixtures) |
+| `npm run seed:rich` | Wipe + seed full lifecycle dataset (multi-role users, batches across every status, lab results, recalls, marketplace listings, bid histories, notifications) |
+| `npm run sepolia:anchor` | Re-anchor seeded lifecycle events on Base Sepolia against the existing contract (idempotent — skips identical hashes) |
+| `npm run sepolia:reseed` | Convenience: `seed:rich` followed by `sepolia:anchor` |
 | **Chain** | |
 | `npm run chain:compile` | Compile Solidity contracts |
 | `npm run chain:test` | Run Hardhat tests |
@@ -210,6 +213,19 @@ npm run dev
 
 ## Testing
 
+### Test matrix (current state)
+
+| Suite | Command | Coverage |
+|-------|---------|----------|
+| Hardhat (Solidity) | `npm run chain:test` | 9 tests across `HoneyTraceRegistry`: batch records (RBAC, replay), lab linkage, recall init, marketplace settlement happy path + replay protection + idempotency + auth-gating |
+| Vitest (TS units) | `npm run test:unit` | 25 tests across 3 files: `marketplace`, `blockchain-utils`, `explorer` (URL builder + `shortHash` edges) |
+| Playwright `app-flow.spec.ts` | `npm run test:e2e -- app-flow.spec.ts` | Full 6-role workflow against `next dev` |
+| Playwright `app-flow.hosted.spec.ts` | `PLAYWRIGHT_BASE_URL=… npm run test:e2e -- app-flow.hosted.spec.ts` | Same workflow against a hosted deployment |
+| Playwright `marketplace.spec.ts` | `npm run test:e2e -- marketplace.spec.ts` | Listing creation → bid → settlement render |
+| Playwright `frontend-smoke.spec.ts` | `npm run test:e2e -- frontend-smoke.spec.ts` | Dashboard render under cold dev compile |
+
+`npm run test:all` runs the chain → unit → e2e pipeline.
+
 ### Unit + Build Safety
 
 ```bash
@@ -230,6 +246,31 @@ npx playwright install chromium
 ```bash
 npm run test:e2e
 ```
+
+#### Reliability notes (Playwright × Carbon × Next dev)
+
+The dev server compiles routes on demand, and Carbon's `TextInput` /
+`Select` components have specific event-handling quirks. The suites
+encode the following hard-won patterns — keep them when adding new
+flows:
+
+- `playwright.config.ts` uses generous timeouts (`timeout: 600_000`,
+  `expect.timeout: 30_000`, `actionTimeout: 60_000`,
+  `navigationTimeout: 120_000`).
+- Use `page.locator('.cds--modal.is-visible')` instead of
+  `page.getByRole('dialog')` — Carbon keeps inert hidden dialogs in the
+  DOM that match `dialog`.
+- For controlled inputs that gate a submit button (consumer search,
+  warehouse intake form), wrap the fill in a small retry loop that
+  alternates between `locator.fill()` and `keyboard.insertText()` and
+  checks both `inputValue()` and `button.isEnabled()` before
+  proceeding.
+- For session-dependent flows (lab publish), poll `/api/auth` from
+  `page.evaluate` until `currentUser.userId` is populated, then
+  `page.reload()` to force the `useCurrentUser` hook to rehydrate
+  before clicking submit.
+- Geolocation is granted unconditionally so the farmer GPS step never
+  hangs.
 
 ## Seeded Accounts
 
@@ -310,7 +351,104 @@ Requires `BLOCKCHAIN_RELAYER_PRIVATE_KEY`,
 
 ## UX Notes
 
-Transaction hash/ID copy controls are available in dashboard and traceability surfaces where hash-like values are shown (lab, officer, enterprise, onboarding receipt, certificate modal).
+### On-chain transaction display (`OnChainTxLink`)
+
+Every surface that previously rendered a raw transaction hash with only a
+copy button now uses the unified `<OnChainTxLink />` component
+(`src/components/Blockchain/OnChainTxLink.tsx`). It always renders:
+
+- a truncated, monospace hash (`shortHash` from `src/lib/explorer.ts`),
+- a copy-to-clipboard button,
+- a "View on BaseScan" link that opens `https://sepolia.basescan.org/tx/<hash>`
+  in a new tab (chain-aware via `explorerTxUrl`), and
+- an expandable on-chain detail panel that fetches block number, status,
+  gas usage, confirmations and timestamp from
+  `GET /api/onchain/tx/[hash]` (a new dynamic route backed by ethers v6
+  against `BASE_SEPOLIA_RPC_URL`).
+
+It accepts two layout flags: `compact` (single-line hash + icon button,
+used in dense tables) and `prefetchDetails` (auto-expand and prefetch on
+mount, used in modals/certificates where the user is clearly inspecting
+a single batch).
+
+Surfaces migrated from the old `CopyableValue` to `OnChainTxLink`:
+
+- `farmer/page.tsx`, `warehouse/page.tsx`, `admin/page.tsx`,
+  `lab/page.tsx`, `officer/page.tsx` — compact mode in tables
+- `enterprise/page.tsx`, `consumer/page.tsx`,
+  `BlockchainCertificate.tsx`, `marketplace/[listingId]/page.tsx` —
+  full mode, `prefetchDetails` on the detail surfaces
+
+Helpers live in `src/lib/explorer.ts` (`DEFAULT_CHAIN_ID`,
+`explorerTxUrl`, `explorerAddressUrl`, `networkLabel`, `shortHash`) and
+have direct unit coverage in `test/unit/explorer.test.ts`.
+
+### Typography system v3 — Plus Jakarta Sans + DM Mono
+
+The typography system was rebuilt around two self-hosted Google fonts
+loaded via `next/font`:
+
+| Role | Family | Where it shows |
+|------|--------|----------------|
+| Primary brand / UI | **Plus Jakarta Sans** (Regular / Medium / SemiBold / Bold) | All headings, body copy, buttons, navigation |
+| Numerical / ledger data | **DM Mono** (Regular / Medium) | Hashes, addresses, prices, weights, GPS, transaction IDs, countdowns |
+
+Global rules enforced in `src/app/globals.css`:
+
+- Minimum rendered size: **12 pt** (system floor — accessibility for
+  field use)
+- Headings: **−6 % letter-spacing** (`--tracking-heading: -0.06em`)
+- Body and UI: **0 %** kerning (`--tracking-body: 0em`)
+- All numerics use `font-variant-numeric: tabular-nums`
+
+Scale (utility classes):
+
+| Class | Family | Size / line-height | Use |
+|-------|--------|--------------------|-----|
+| `.text-h1` | Plus Jakarta Bold | 48pt / 1.1 | Hero titles |
+| `.text-h2` | Plus Jakarta SemiBold | 32pt / 1.2 | Section headers, dashboard modules |
+| `.text-h3` | Plus Jakarta Medium | 24pt / 1.3 | Card titles, form groupings |
+| `.text-body-lg` | Plus Jakarta Regular | 18pt / 1.5 | Intro paragraphs |
+| `.text-body` | Plus Jakarta Regular | 14pt / 1.6 | Default UI text |
+| `.text-small` | Plus Jakarta Medium | 12pt / 1.4 | Captions, breadcrumbs |
+| `.mono-data` | DM Mono Medium | 20pt | Large transaction totals, supply chain IDs |
+| `.num`, `.ledger-num` | DM Mono Regular | inherit | Inline tonnage, GPS, wallet addresses, prices |
+
+Typography tokens are exposed as CSS variables on `:root`:
+`--font-primary`, `--font-numeric`, `--tracking-heading`,
+`--tracking-body`. Marketplace component CSS
+(`src/components/Marketplace/marketplace.module.css`) consumes
+`var(--font-mono)` for `.price-display` and `.countdown`, and
+`var(--font-primary)` for `.closed-date`.
+
+`src/app/[locale]/layout.tsx` is the single place to swap font weights
+or add a new family — both `Plus_Jakarta_Sans` and `DM_Mono` are
+imported from `next/font/google`, exposed as CSS variables on `<html>`,
+and self-hosted with no runtime fetch.
+
+### Rich seed + Sepolia re-anchor pipeline
+
+To exercise every product surface end-to-end (UI, API, contract) without
+clicking through every wizard, two scripts ship out of the box:
+
+1. **`scripts/seed-rich.ts`** (`npm run seed:rich`) — wipes the target
+   MongoDB database and writes a coherent fixture set:
+   - one user per role (farmer, warehouse, lab, officer, enterprise,
+     consumer, secretary, admin) with deterministic credentials,
+   - batches in every status (`pending`, `in_warehouse`, `in_testing`,
+     `certified`, `dispatched`, `recalled`),
+   - lab results (passing + failing), recalls, marketplace listings
+     (live / settled / unsold), bid histories, notifications.
+2. **`scripts/anchor-sepolia.ts`** (`npm run sepolia:anchor`) — walks
+   the seeded data and anchors every lifecycle event on the existing
+   Base Sepolia deployment (`0x2D85…D8b6`) using staged batch ids
+   (`<batchId>#<status>`). Each on-chain write is **idempotent**: if the
+   contract already holds an identical hash for that staged id, the
+   script logs `skip` and moves on, so re-running costs no gas.
+
+Use `npm run sepolia:reseed` to do both in sequence — useful before a
+demo or before running the hosted Playwright suite against a fresh
+dataset.
 
 ## Unified Design System v2
 

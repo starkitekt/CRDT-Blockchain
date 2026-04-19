@@ -17,7 +17,7 @@ import { useBatches } from '@/hooks/useBatches';
 import BlockchainCertificate from '@/components/Traceability/BlockchainCertificate';
 import IdentityVerificationModal from '@/components/Onboarding/IdentityVerificationModal';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
-import CopyableValue from '@/components/CopyableValue';
+import OnChainTxLink from '@/components/Blockchain/OnChainTxLink';
 import type { Batch } from '@/types';
 
 function fmtDate(d?: string | null) {
@@ -181,12 +181,13 @@ export default function EnterpriseDashboard() {
                       <TableCell className="!p-4 !border-none"><QualityTag batch={batch} /></TableCell>
                       <TableCell className="!p-4 !border-none">
                         {batch.onChainTxHash ? (
-                          <div className="flex items-center gap-1">
-                            <span className="font-mono text-[11px] text-teal-700 break-all max-w-[200px]">{batch.onChainTxHash}</span>
-                            <CopyableValue value={batch.onChainTxHash} label="Copy" className="min-h-0 h-6 px-1" />
-                          </div>
+                          <OnChainTxLink
+                            txHash={batch.onChainTxHash}
+                            label="Anchor"
+                            compact
+                          />
                         ) : (
-                          <Tag type="outline" className="!rounded-md text-[10px] border-none">Off-chain</Tag>
+                          <Tag type="outline" className="!rounded-md text-eyebrow border-none">Off-chain</Tag>
                         )}
                       </TableCell>
                       <TableCell className="!p-4 !border-none text-slate-500 font-medium">{fmtDate(batch.dispatchedAt)}</TableCell>
@@ -226,9 +227,12 @@ export default function EnterpriseDashboard() {
             </div>
             {detailBatch.onChainTxHash && (
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">On-Chain Transaction Hash</p>
-                <p className="font-mono text-xs break-all text-teal-700">{detailBatch.onChainTxHash}</p>
-                <CopyableValue value={detailBatch.onChainTxHash} label="Copy Full Hash" className="mt-2 min-h-0 h-7 px-2" />
+                <p className="text-eyebrow text-slate-400 mb-2">On-chain anchor</p>
+                <OnChainTxLink
+                  txHash={detailBatch.onChainTxHash}
+                  label="Tx hash"
+                  prefetchDetails
+                />
               </div>
             )}
           </div>

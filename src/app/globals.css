@@ -21,6 +21,14 @@
   --spacing-spacing-xl: var(--spacing-xl);
   --spacing-spacing-xxl: var(--spacing-xxl);
   --spacing-spacing-3xl: var(--spacing-3xl);
+
+  /* Tailwind font utilities (v4 picks these up from @theme).
+     - `font-sans` → Plus Jakarta Sans (UI / brand).
+     - `font-mono` → DM Mono (every digit / hash / ledger value).
+     - `font-display` → same as sans, semantically marks display-only headings. */
+  --font-sans:    var(--font-primary);
+  --font-mono:    var(--font-numeric);
+  --font-display: var(--font-primary);
 }
 
 @layer base {
@@ -33,8 +41,19 @@
     --spacing-xxl: 4rem;
     --spacing-3xl: 6rem;
 
-    --font-primary: var(--font-dm-sans), var(--font-plex-sans), ui-sans-serif;
-    --font-mono: 'IBM Plex Mono', monospace;
+    /* HoneyTRACE typography system —
+       Primary UI:  Plus Jakarta Sans (modern, approachable, highly legible).
+       Numerical:   DM Mono           (ledger feel, tabular lining for digits).
+       Both loaded by next/font in app/[locale]/layout.tsx. */
+    --font-primary:  var(--font-jakarta-sans), 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-numeric:  var(--font-dm-mono),     'DM Mono',           ui-monospace,  'SFMono-Regular', Menlo, Consolas, monospace;
+    /* Back-compat alias for the dozens of existing `var(--font-mono)`
+       references throughout the codebase — they all now resolve to DM Mono. */
+    --font-mono:     var(--font-numeric);
+
+    /* Heading kerning (-6%) and body kerning (0%) per the typography spec. */
+    --tracking-heading: -0.06em;
+    --tracking-body:     0;
 
     --background: #f3f4f6;
     --surface: #ffffff;
@@ -66,13 +85,24 @@
   h1, h2, h3, h4 {
     font-family: var(--font-primary);
     font-weight: 700;
-    letter-spacing: -0.03em;
+    /* -6% kerning per typography spec for a tighter, editorial feel. */
+    letter-spacing: var(--tracking-heading);
     color: var(--text-primary);
   }
 
   .mono-data {
     font-family: var(--font-mono);
+    /* Tabular lining + slashed zero for ledger/blockchain digit columns. */
+    font-feature-settings: "tnum" 1, "lnum" 1, "zero" 1;
     word-break: break-all;
+  }
+
+  /* Numerical typography helper — apply to every digit surface
+     (prices, weights, GPS coordinates, hashes, tx ids, totals, KPIs). */
+  .num,
+  .ledger-num {
+    font-family: var(--font-mono);
+    font-feature-settings: "tnum" 1, "lnum" 1, "zero" 1;
   }
 }
 
@@ -115,43 +145,112 @@
    Typography Utilities
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ───────────────────────────────────────────────────────────────────────────
+   Typography scale — matches the HoneyTRACE typography spec.
+   Sizes are stated in pt in the design doc but applied here in rem so they
+   scale with user font-size preferences. 1rem = 16px ≈ 12pt baseline.
+       H1   48pt / 1.1   Plus Jakarta Bold        kerning -6%
+       H2   32pt / 1.2   Plus Jakarta SemiBold    kerning -6%
+       H3   24pt / 1.3   Plus Jakarta Medium      kerning -6%
+       Body Large 18pt / 1.5  Regular              kerning  0%
+       Body       14pt / 1.6  Regular              kerning  0%
+       Small      12pt / 1.4  Medium  (system floor — accessibility)
+   Numbers are strictly DM Mono with tabular lining; see .num / .ledger-num.
+   ─────────────────────────────────────────────────────────────────────── */
+
 .text-h1 {
-  font-size: 2.25rem;
-  line-height: 1.15;
+  font-family: var(--font-primary);
+  font-size: 2.25rem;        /* 36px on mobile … */
+  line-height: 1.1;
   font-weight: 700;
-  letter-spacing: -0.04em;
+  letter-spacing: var(--tracking-heading);
+  color: var(--text-primary);
 }
 
 .text-h2 {
-  font-size: 1.5rem;
-  line-height: 1.25;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-@media (min-width: 768px) {
-  .text-h1 { font-size: 3rem; }
-  .text-h2 { font-size: 1.875rem; }
+  font-family: var(--font-primary);
+  font-size: 1.625rem;       /* 26px on mobile … */
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: var(--tracking-heading);
+  color: var(--text-primary);
 }
 
 .text-h3 {
-  font-size: 1.25rem;
-  line-height: 1.4;
-  font-weight: 700;
+  font-family: var(--font-primary);
+  font-size: 1.25rem;        /* 20px on mobile … */
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: var(--tracking-heading);
+  color: var(--text-primary);
+}
+
+@media (min-width: 768px) {
+  .text-h1 { font-size: 3rem;    }   /* 48px = 48pt @ 16px base */
+  .text-h2 { font-size: 2rem;    }   /* 32px = 32pt */
+  .text-h3 { font-size: 1.5rem;  }   /* 24px = 24pt */
+}
+
+.text-body-lg {
+  font-family: var(--font-primary);
+  font-size: 1.125rem;       /* 18px = 18pt */
+  line-height: 1.5;
+  font-weight: 400;
+  letter-spacing: var(--tracking-body);
+  color: var(--text-secondary);
 }
 
 .text-body {
-  font-size: 1rem;
-  line-height: 1.625;
+  font-family: var(--font-primary);
+  font-size: 0.875rem;       /* 14px = 14pt — default UI body */
+  line-height: 1.6;
+  font-weight: 400;
+  letter-spacing: var(--tracking-body);
   color: var(--text-secondary);
 }
 
+/* Small detail — captions, breadcrumbs, legal disclaimers. 12pt accessibility floor. */
+.text-small,
 .text-caption {
-  font-size: 0.6875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  font-weight: 700;
+  font-family: var(--font-primary);
+  font-size: 0.75rem;        /* 12px = 12pt — never shrink below this */
+  line-height: 1.4;
+  font-weight: 500;
+  letter-spacing: var(--tracking-body);
   color: var(--text-secondary);
+}
+
+/* Eyebrow — uppercase, wider tracking, used as section/card labels. */
+.text-eyebrow {
+  font-family: var(--font-primary);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-secondary);
+}
+
+/* Data Highlight — large transaction totals & supply-chain tracking IDs.
+   Strictly DM Mono per spec. */
+.text-data-highlight {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1, "lnum" 1, "zero" 1;
+  font-size: 1.25rem;        /* 20px = 20pt */
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--text-primary);
+}
+
+/* Inline Metrics — tonnage, GPS, wallet addresses, token prices.
+   Inherits size from parent so it slots into 14pt or 18pt body cleanly. */
+.text-metric,
+.text-inline-metric {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1, "lnum" 1, "zero" 1;
+  font-weight: 400;
+  letter-spacing: 0;
 }
 
 /* Honey-amber gradient text. Used for headline numerals + brand accents.

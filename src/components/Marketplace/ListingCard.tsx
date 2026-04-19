@@ -55,14 +55,18 @@ export default function ListingCard({ listing, locale, highlight }: Props) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+          {/* Listing id is a tracking number → DM Mono for ledger feel. */}
+          <p className="text-eyebrow text-slate-400 ledger-num">
             {listing.listingId}
           </p>
-          <h3 className="mt-1 font-bold truncate text-[15px] leading-tight text-slate-900">
+          <h3 className="text-h3 mt-1 truncate text-slate-900">
             {listing.floraType} Honey
           </h3>
-          <p className="text-[11px] mt-1 text-slate-500 truncate">
-            {listing.weightKg.toFixed(1)} kg · Grade {listing.grade} · {listing.warehouseName}
+          <p className="text-small text-slate-500 truncate">
+            <span className="ledger-num">{listing.weightKg.toFixed(1)} kg</span>
+            {' · Grade '}
+            <span className="ledger-num">{listing.grade}</span>
+            {` · ${listing.warehouseName}`}
           </p>
         </div>
         <div className="shrink-0">{statusTag}</div>
@@ -70,7 +74,7 @@ export default function ListingCard({ listing, locale, highlight }: Props) {
 
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+          <p className="text-eyebrow text-slate-400 mb-1">
             {listing.bidCount > 0 ? 'Highest bid' : 'Reserve'}
           </p>
           <p className={styles['price-display']}>
@@ -78,13 +82,14 @@ export default function ListingCard({ listing, locale, highlight }: Props) {
               listing.bidCount > 0 ? listing.currentPricePaise : listing.reservePricePaise
             )}
           </p>
-          <p className="text-[11px] text-slate-500 mt-1 truncate">
-            {listing.bidCount} {listing.bidCount === 1 ? 'bid' : 'bids'}
+          <p className="text-small text-slate-500 mt-1 truncate">
+            <span className="ledger-num">{listing.bidCount}</span>
+            {` ${listing.bidCount === 1 ? 'bid' : 'bids'}`}
             {listing.highestBidderName ? ` · ${listing.highestBidderName}` : ''}
           </p>
         </div>
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+          <p className="text-eyebrow text-slate-400 mb-1">
             {isLive ? 'Time remaining' : 'Closed'}
           </p>
           {isLive ? (
@@ -98,16 +103,19 @@ export default function ListingCard({ listing, locale, highlight }: Props) {
               {closedDateText}
             </p>
           )}
-          <p className="text-[11px] text-slate-500 mt-1 truncate">
-            Storage: <strong className="text-slate-700">{formatPaiseToINR(listing.storageCostPaiseLive)}</strong>
+          <p className="text-small text-slate-500 mt-1 truncate">
+            Storage:{' '}
+            <strong className="text-slate-700 ledger-num">
+              {formatPaiseToINR(listing.storageCostPaiseLive)}
+            </strong>
           </p>
         </div>
       </div>
 
       <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100">
-        <p className="text-[11px] text-slate-500 flex items-center gap-1 min-w-0">
+        <p className="text-small text-slate-500 flex items-center gap-1 min-w-0">
           <Locked size={11} className="opacity-50 shrink-0" aria-hidden />
-          <span className="font-mono text-slate-700 truncate">{listing.batchId}</span>
+          <span className="ledger-num text-slate-700 truncate">{listing.batchId}</span>
         </p>
         <Link href={`/${locale}/dashboard/marketplace/${listing.listingId}`} className="!no-underline shrink-0">
           <Button size="sm" kind="primary" renderIcon={isLive ? ShoppingCart : ArrowRight}>
