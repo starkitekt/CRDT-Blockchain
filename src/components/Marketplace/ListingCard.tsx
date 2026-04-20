@@ -53,16 +53,15 @@ export default function ListingCard({ listing, locale, highlight }: Props) {
       data-testid="listing-card"
       style={highlight ? { boxShadow: '0 0 0 2px rgba(245, 158, 11, 0.6)' } : undefined}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          {/* Listing id is a tracking number → DM Mono for ledger feel. */}
+      <div className="!flex flex-row items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <p className="text-eyebrow text-slate-400 ledger-num">
             {listing.listingId}
           </p>
-          <h3 className="text-h3 mt-1 truncate text-slate-900">
+          <h3 className="text-h3 mt-1.5 truncate text-slate-900 !tracking-tight">
             {listing.floraType} Honey
           </h3>
-          <p className="text-small text-slate-500 truncate">
+          <p className="text-small text-slate-500 truncate mt-1">
             <span className="ledger-num">{listing.weightKg.toFixed(1)} kg</span>
             {' · Grade '}
             <span className="ledger-num">{listing.grade}</span>
@@ -72,48 +71,44 @@ export default function ListingCard({ listing, locale, highlight }: Props) {
         <div className="shrink-0">{statusTag}</div>
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
-        <div className="min-w-0">
-          <p className="text-eyebrow text-slate-400 mb-1">
-            {listing.bidCount > 0 ? 'Highest bid' : 'Reserve'}
-          </p>
-          <p className={styles['price-display']}>
-            {formatPaiseToINR(
-              listing.bidCount > 0 ? listing.currentPricePaise : listing.reservePricePaise
-            )}
-          </p>
-          <p className="text-small text-slate-500 mt-1 truncate">
-            <span className="ledger-num">{listing.bidCount}</span>
-            {` ${listing.bidCount === 1 ? 'bid' : 'bids'}`}
-            {listing.highestBidderName ? ` · ${listing.highestBidderName}` : ''}
-          </p>
-        </div>
-        <div className="min-w-0">
-          <p className="text-eyebrow text-slate-400 mb-1">
-            {isLive ? 'Time remaining' : 'Closed'}
-          </p>
-          {isLive ? (
-            <p className={`${styles['countdown']} ${ending ? styles['ending'] : ''}`}>
-              <Time size={14} className="inline-block mr-1.5 -mt-0.5 opacity-60" aria-hidden />
-              {remainingText}
-            </p>
-          ) : (
-            <p className={styles['closed-date']}>
-              <Time size={14} className="inline-block mr-1.5 -mt-0.5 opacity-60" aria-hidden />
-              {closedDateText}
-            </p>
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-5 gap-y-1">
+        <p className="text-eyebrow text-slate-400">
+          {listing.bidCount > 0 ? 'Highest bid' : 'Reserve'}
+        </p>
+        <p className="text-eyebrow text-slate-400">
+          {isLive ? 'Time remaining' : 'Closed'}
+        </p>
+        <p className={styles['price-display']}>
+          {formatPaiseToINR(
+            listing.bidCount > 0 ? listing.currentPricePaise : listing.reservePricePaise
           )}
-          <p className="text-small text-slate-500 mt-1 truncate">
-            Storage:{' '}
-            <strong className="text-slate-700 ledger-num">
-              {formatPaiseToINR(listing.storageCostPaiseLive)}
-            </strong>
+        </p>
+        {isLive ? (
+          <p className={`${styles['countdown']} ${ending ? styles['ending'] : ''} flex items-center gap-1.5`}>
+            <Time size={14} className="opacity-60 shrink-0" aria-hidden />
+            {remainingText}
           </p>
-        </div>
+        ) : (
+          <p className={`${styles['closed-date']} flex items-center gap-1.5`}>
+            <Time size={14} className="opacity-60 shrink-0" aria-hidden />
+            {closedDateText}
+          </p>
+        )}
+        <p className="text-small text-slate-500 truncate mt-0.5">
+          <span className="ledger-num">{listing.bidCount}</span>
+          {` ${listing.bidCount === 1 ? 'bid' : 'bids'}`}
+          {listing.highestBidderName ? ` · ${listing.highestBidderName}` : ''}
+        </p>
+        <p className="text-small text-slate-500 truncate mt-0.5">
+          Storage:{' '}
+          <span className="text-slate-700 ledger-num">
+            {formatPaiseToINR(listing.storageCostPaiseLive)}
+          </span>
+        </p>
       </div>
 
-      <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100">
-        <p className="text-small text-slate-500 flex items-center gap-1 min-w-0">
+      <div className="!flex flex-row items-center justify-between gap-3 pt-4 border-t border-slate-100">
+        <p className="text-small text-slate-500 flex items-center gap-1.5 min-w-0">
           <Locked size={11} className="opacity-50 shrink-0" aria-hidden />
           <span className="ledger-num text-slate-700 truncate">{listing.batchId}</span>
         </p>

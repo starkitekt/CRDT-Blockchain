@@ -114,15 +114,23 @@
 .dashboard-container {
   max-width: 1440px;
   margin: 0 auto;
-  padding: var(--spacing-md);
-  padding-top: var(--spacing-lg);
-  padding-bottom: var(--spacing-lg);
+  /* Outer page padding — generous gutters so cards never kiss the viewport
+     edge. Mobile keeps a small gutter (16px); ≥640 jumps to 24px; ≥1024
+     switches to the desktop value (40px). The original 64px desktop padding
+     was too generous on 1280–1440px viewports and starved cards of width. */
+  padding: 1rem 1rem 1.5rem;
 }
 
-@media (min-width: 768px) {
-  .dashboard-container {
-    padding: var(--spacing-xxl);
-  }
+@media (min-width: 640px) {
+  .dashboard-container { padding: 1.25rem 1.5rem 2rem; }
+}
+
+@media (min-width: 1024px) {
+  .dashboard-container { padding: 1.75rem 2.5rem 2.5rem; }
+}
+
+@media (min-width: 1440px) {
+  .dashboard-container { padding: 2rem 3rem 3rem; }
 }
 
 .standard-tile {
@@ -278,11 +286,21 @@
    Surface / Elevation Tokens
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Solid surface, used as the default card background everywhere. */
+/* Solid surface, used as the default card background everywhere.
+   We boost specificity (`html .glass-panel`) so we beat Carbon's
+   `.cds--tile` default colour (`var(--cds-layer-01)` ≈ #f4f4f4) without
+   needing `!important` — that way authors can still opt-out via Tailwind
+   `bg-*` utilities (e.g. the dark certificate tile in the lab dashboard). */
 .glass-panel {
   background: #ffffff;
   border: 1px solid #e5e7eb;
   box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+}
+/* Beat Carbon's default `.cds--tile { background: var(--cds-layer-01) }`,
+   but only when no Tailwind palette utility is present. The :not() chain
+   keeps `.bg-slate-950`, `.bg-amber-50`, etc. fully in control. */
+html .cds--tile.glass-panel:not([class*="bg-slate-"]):not([class*="bg-zinc-"]):not([class*="bg-neutral-"]):not([class*="bg-stone-"]):not([class*="bg-amber-"]):not([class*="bg-emerald-"]):not([class*="bg-blue-"]):not([class*="bg-rose-"]):not([class*="bg-black"]):not([class*="bg-white"]) {
+  background-color: #ffffff;
 }
 
 /* Translucent variant — sits on top of gradients/imagery (marketplace cards). */
@@ -2922,7 +2940,19 @@ body.high-contrast .lp-section-hd p {
   transform: translateY(-1px);
 }
 
-.kpi-card-body { padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.kpi-card-body {
+  padding: 1.375rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  /* Min-height keeps KPI cards from collapsing when their value is "—" or
+     an icon decoration is positioned absolutely behind the value. */
+  min-height: 132px;
+}
+
+@media (min-width: 768px) {
+  .kpi-card-body { padding: 1.5rem 1.75rem; min-height: 144px; }
+}
 
 .kpi-card-label,
 .fd-kpi-label,
@@ -3217,6 +3247,179 @@ body.high-contrast .lp-section-hd p {
   letter-spacing: 0.08em;
   font-size: 0.625rem !important;
   border: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Density + breathing-room patch (typography v3 follow-up)
+   The original v3 typography pass made every dashboard render with
+   noticeably less breathing room because Carbon defaults + namespaced
+   utility classes (fd-/wd-/ld-/od-/sd-) hard-coded compact paddings
+   relative to IBM Plex Sans. The block below restores generous spacing
+   across every dashboard regardless of which class namespace it lives in.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* All Carbon Tiles inside dashboards inherit a white surface so the page
+   doesn't end up with grey-on-grey cards (Carbon's default tile colour). */
+.dashboard-container .cds--tile {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+}
+
+/* Section spacing inside `<main>` of UnifiedDashboardLayout — make sure
+   sibling cards don't collide. The layout already sets `gap-spacing-xl`
+   but Carbon's reset removes margin from <section>. */
+.dashboard-container > main > * + *,
+.dashboard-container .glass-panel + .glass-panel { margin-top: 0; }
+.dashboard-container .glass-panel { padding: 1.5rem 1.75rem; border-radius: var(--radius-lg); }
+@media (max-width: 640px) { .dashboard-container .glass-panel { padding: 1.125rem 1.25rem; } }
+
+/* Carbon Tiles get the same generous padding as our glass panels so the
+   `<Tile className="glass-panel">` mash-up renders consistently. */
+.dashboard-container .cds--tile.glass-panel { padding: 1.5rem 1.75rem; }
+
+/* Carbon DataTable inside any dashboard — restore comfortable cell padding
+   that tailwind utilities sometimes flatten with !p-2 / !p-4 overrides. */
+.dashboard-container .cds--data-table th,
+.dashboard-container .cds--data-table td {
+  padding: 0.875rem 1.25rem;
+  vertical-align: middle;
+}
+
+/* Carbon Modal — slightly larger inner padding so multi-field forms (lab,
+   farmer, marketplace create-listing) don't feel claustrophobic. */
+.cds--modal-container .cds--modal-content {
+  padding: 1.25rem 2rem 2rem;
+}
+@media (max-width: 640px) {
+  .cds--modal-container .cds--modal-content { padding: 1rem 1.25rem 1.5rem; }
+}
+
+/* Carbon FormGroup spacing — increase the gap between stacked inputs in
+   any dashboard form to recover the breathing room lost when typography
+   v3 increased label heights (Plus Jakarta Sans is taller per em than IBM
+   Plex Sans). */
+.cds--form-item + .cds--form-item { margin-top: 1.125rem; }
+.cds--form-item { margin-bottom: 0.25rem; }
+
+/* Carbon FormLabel — we want the same eyebrow weight on every form. */
+.cds--label {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #475569;
+  margin-bottom: 0.375rem;
+}
+
+/* Carbon InlineNotification — reset its internal padding because v11
+   ships with a tight horizontal padding that becomes uncomfortable in
+   our wider dashboard layout. */
+.cds--inline-notification {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: var(--radius-md);
+}
+
+/* Carbon Tag — tag tokens are used as status pills throughout dashboards;
+   keep a single visual treatment for everyone (replaces the `!rounded-md
+   font-bold uppercase tracking-widest text-[10px]` cargo-cult that's
+   sprinkled everywhere). */
+.cds--tag {
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.6875rem;
+  padding: 0.2rem 0.55rem;
+  height: auto;
+  line-height: 1.4;
+}
+
+/* Carbon Button focus rings — same brand colour everywhere. */
+.cds--btn:focus { box-shadow: inset 0 0 0 2px var(--interactive); }
+
+/* Carbon SkeletonText — slightly more spacing between lines so loading
+   states don't look as cluttered as the audit screenshots showed. */
+.cds--skeleton__text + .cds--skeleton__text { margin-top: 0.625rem; }
+
+/* ── Decorative absolute icons inside KPI tiles ─────────────────────────
+   Several dashboards (enterprise, consumer, admin) place an oversized
+   icon at the top-right of each KPI card with `opacity-10` for a
+   "watermark" effect. The original 100×100 size eats the entire card on
+   1280px viewports. Cap them so they always read as decoration, never
+   as content. */
+.kpi-card .absolute > svg,
+.glass-panel .absolute > svg {
+  max-width: 56px;
+  max-height: 56px;
+}
+
+/* ── Listing detail KV grid ─────────────────────────────────────────────
+   The `KV` helper in the marketplace listing detail page renders a 4-col
+   grid of label/value pairs with no row gap — the second row ends up
+   visually colliding with the first. Add a generous y-gap. */
+.kv-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem 1rem;
+}
+@media (min-width: 768px) {
+  .kv-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.5rem 1.25rem; }
+}
+
+/* ── Listing detail typography & metrics ─────────────────────────────────
+   The marketplace listing title can include long flora-name + batch-number
+   strings; the global `text-h1` (48px Bold, -6% tracking) is too aggressive
+   here and visually mashes long titles together. We use a slightly smaller
+   weight + tracking, force word-spacing, and allow the title to wrap on
+   word boundaries so it never overlaps the status pill. */
+.listing-detail-title {
+  font-family: var(--font-primary);
+  font-size: clamp(1.75rem, 1.4rem + 1.4vw, 2.5rem);   /* 28px → 40px */
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  word-spacing: 0.05em;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+/* Marketplace listing detail metric grid: a calm, well-paced ledger of
+   eight values. We avoid 4 columns (which mashed labels under each other
+   on 1024-1280 viewports) and ensure each row has plenty of vertical
+   breathing room so the eye can scan KEY → value → KEY → value cleanly. */
+.listing-detail-metrics {
+  display: grid;
+  grid-template-columns: 1fr;
+  row-gap: 1.75rem;
+  column-gap: 2rem;
+}
+@media (min-width: 640px)  { .listing-detail-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1280px) { .listing-detail-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: 2rem; row-gap: 2rem; } }
+
+/* ── Lab dashboard form spacing ────────────────────────────────────────
+   The Technical Analysis Hub stacks 18+ NABL parameter inputs into a
+   single column. Without explicit spacing the labels overlap the value
+   bound below. Carbon's `Stack gap=4` gives only 16px which is too tight
+   once Plus Jakarta Sans takes effect. */
+.lab-form-section + .lab-form-section { margin-top: 2rem; }
+.lab-form-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #1d4ed8;
+  margin: 0.25rem 0 0.875rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* ── Mobile: shrink generous outer paddings on the listing detail block
+      so the right column doesn't squeeze the values. ─────────────────── */
+@media (max-width: 640px) {
+  .listing-detail-main { padding: 1.25rem !important; }
+  .listing-detail-title { font-size: 1.625rem !important; }
 }
 
 /* ── Motion safety — honour OS-level reduced-motion preference ──────── */

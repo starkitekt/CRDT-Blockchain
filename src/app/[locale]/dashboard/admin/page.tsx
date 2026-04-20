@@ -386,11 +386,12 @@ export default function AdminDashboard() {
 
   const headerActions = (
     <div className="flex flex-col sm:flex-row gap-spacing-sm w-full md:w-auto mt-spacing-md md:mt-0">
-      <Button renderIcon={Audit} kind="secondary" onClick={() => setIsTourOpen(true)} className="w-full sm:w-auto flex justify-center">{t('audit_tour')}</Button>
-      <Button renderIcon={WarningAltFilled} kind="danger--ghost" onClick={() => setIsRecallOpen(true)} className="w-full sm:w-auto flex justify-center">Initiate Recall</Button>
+      <Button size="md" renderIcon={Audit} kind="tertiary" onClick={() => setIsTourOpen(true)} className="w-full sm:w-auto flex justify-center !rounded-lg">{t('audit_tour')}</Button>
+      <Button size="md" renderIcon={WarningAltFilled} kind="danger--tertiary" onClick={() => setIsRecallOpen(true)} className="w-full sm:w-auto flex justify-center !rounded-lg">Initiate Recall</Button>
       <Button
+        size="md"
         renderIcon={Download}
-        className="w-full sm:w-auto flex justify-center"
+        className="w-full sm:w-auto flex justify-center !rounded-lg"
         onClick={async () => {
           try {
             const res = await fetch('/api/admin/export?format=csv');

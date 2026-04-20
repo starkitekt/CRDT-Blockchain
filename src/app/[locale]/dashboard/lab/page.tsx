@@ -260,8 +260,8 @@ export default function LabDashboard() {
             </div>
 
             {/* FSSAI & Accreditation */}
-            <div className="mb-spacing-lg">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-spacing-md">{tDashboard('section_fssai')}</p>
+            <div className="lab-form-section">
+              <p className="lab-form-section-title">{tDashboard('section_fssai')}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-spacing-md">
                 <TextInput id="fssai" labelText={tDashboard('fssai_license')} placeholder={tDashboard('fssai_placeholder')}
                   value={form.fssaiLicense} onChange={setField('fssaiLicense')}
@@ -273,8 +273,8 @@ export default function LabDashboard() {
             </div>
 
             {/* Core Codex Parameters */}
-            <div className="mb-spacing-lg">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-spacing-md">{tDashboard('section_core_params')}</p>
+            <div className="lab-form-section">
+              <p className="lab-form-section-title">{tDashboard('section_core_params')}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-spacing-md">
                 <TextInput id="moisture" labelText={tDashboard('test_moisture')} placeholder={tDashboard('moisture_placeholder')} helperText={tDashboard('moisture_limit')}
                   value={form.moisture} onChange={setField('moisture')} invalid={!!formErrors.moisture} invalidText={formErrors.moisture} />
@@ -296,8 +296,8 @@ export default function LabDashboard() {
             </div>
 
             {/* Advanced & Regulatory */}
-            <div className="mb-spacing-lg">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-spacing-md">{tDashboard('section_advanced_params')}</p>
+            <div className="lab-form-section">
+              <p className="lab-form-section-title">{tDashboard('section_advanced_params')}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-spacing-md">
                 <TextInput id="nmr" labelText={tDashboard('test_nmr')} placeholder={tDashboard('nmr_placeholder')} helperText={tDashboard('nmr_limit')}
                   value={form.nmr} onChange={setField('nmr')} />
@@ -394,7 +394,10 @@ export default function LabDashboard() {
         <div className="flex flex-col gap-spacing-lg">
           <PriorStepQR stepName="Warehouse Manager" batchId={selectedBatchId || '--'} details="Custody transfer verified" />
           <BlockchainMapStamp locationName="NABL Regional Lab #04" latitude="24.5765° N" longitude="80.2210° E" utcTime={new Date().toISOString().substring(11,19)} />
-          <Tile className="glass-panel bg-slate-950 text-white p-spacing-xl rounded-3xl shadow-2xl relative overflow-hidden group elevation-premium border-none">
+          <Tile
+            className="glass-panel text-white p-spacing-xl rounded-3xl shadow-2xl relative overflow-hidden group elevation-premium border-none"
+            style={{ backgroundColor: '#020617' }}
+          >
             <div className="absolute right-[-40px] top-[-40px] opacity-10 group-hover:rotate-12 transition-transform duration-[2000ms] text-primary">
               <Certificate size={240} />
             </div>
@@ -404,7 +407,7 @@ export default function LabDashboard() {
             <div className="border border-white/5 p-spacing-xl rounded-2xl relative z-10 bg-white/5 backdrop-blur-xl ring-1 ring-white/10">
               <div className="flex justify-between items-start mb-spacing-xl">
                 <div>
-                  <h4 className="text-h2 !text-white !tracking-normal">{tDashboard('certOfPurity')}</h4>
+                  <h4 className="text-h3 !text-white !tracking-normal">{tDashboard('certOfPurity')}</h4>
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
                     {(() => {
                       const b = pendingBatches.find(x => x.batchId === selectedBatchId || x.id === selectedBatchId);

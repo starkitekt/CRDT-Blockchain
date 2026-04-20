@@ -219,55 +219,57 @@ export default function ListingDetailPage() {
         <InlineNotification kind="error" lowContrast title="Error" subtitle={error} onCloseButtonClick={() => setError(null)} />
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-spacing-lg">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-spacing-xl">
         {/* Main column */}
         <div className="lg:col-span-2 space-y-spacing-lg">
-          <section className="glass-panel rounded-2xl p-spacing-xl shadow-xl elevation-premium">
-            <div className="flex items-start justify-between gap-spacing-md mb-spacing-lg">
-              <div className="min-w-0">
+          <section className="listing-detail-main glass-panel rounded-2xl shadow-xl elevation-premium" style={{ padding: '2.25rem 2.5rem' }}>
+            <div className="!flex flex-row items-start justify-between gap-spacing-lg mb-spacing-xl">
+              <div className="min-w-0 flex-1">
                 <p className="text-eyebrow text-slate-400">
                   Listing <span className="ledger-num">{listing.listingId}</span>
                 </p>
-                <h1 className="text-h1 mt-1">{listing.floraType} Honey</h1>
-                <p className="text-body mt-spacing-xs text-slate-600">
+                <h1 className="listing-detail-title mt-2.5">{listing.floraType} Honey</h1>
+                <p className="text-body mt-spacing-sm text-slate-600">
                   <span className="ledger-num">{listing.weightKg.toFixed(1)} kg</span>
                   {' · Grade '}<span className="ledger-num">{listing.grade}</span>
                   {' · Harvested by '}{listing.farmerName}
                 </p>
               </div>
-              <div className="shrink-0">{headerStatus}</div>
+              <div className="shrink-0 pt-1">{headerStatus}</div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-spacing-lg">
-              <div className="p-spacing-md rounded-xl bg-slate-50 border border-slate-100">
-                <p className="text-eyebrow text-slate-400 mb-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-spacing-md">
+              <div className="rounded-2xl bg-slate-50 border border-slate-200/70" style={{ padding: '1.5rem 1.75rem' }}>
+                <p className="text-eyebrow text-slate-500" style={{ marginBottom: '0.75rem' }}>
                   {finalPriceLabel}
                 </p>
-                <p className={styles['price-display']} data-testid="current-price">
+                <p className={styles['price-display-lg']} data-testid="current-price">
                   {formatPaiseToINR(
                     listing.bidCount > 0 ? listing.currentPricePaise : listing.reservePricePaise
                   )}
                 </p>
                 {listing.highestBidderName && (
-                  <p className="text-small mt-1 text-slate-500">
+                  <p className="text-small text-slate-500" style={{ marginTop: '0.625rem' }}>
                     Leader: <strong className="text-slate-800">{listing.highestBidderName}</strong>
                   </p>
                 )}
               </div>
-              <div className="p-spacing-md rounded-xl bg-slate-50 border border-slate-100">
-                <p className="text-eyebrow text-slate-400 mb-2">
+              <div className="rounded-2xl bg-slate-50 border border-slate-200/70" style={{ padding: '1.5rem 1.75rem' }}>
+                <p className="text-eyebrow text-slate-500" style={{ marginBottom: '0.75rem' }}>
                   {listing.status === 'live' ? 'Time remaining' : listing.status === 'settled' ? 'Settled at' : 'Closed at'}
                 </p>
-                <p className={`${styles['countdown']} ${remaining.ending ? styles['ending'] : ''}`} data-testid="countdown">
-                  <Time size={18} className="inline-block mr-2 -mt-1 opacity-60" />
-                  {listing.status === 'live'
-                    ? remaining.text
-                    : new Date(listing.settledAt ?? listing.endsAt).toLocaleString('en-IN', {
-                        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-                      })}
+                <p className={`${styles['countdown-lg']} ${remaining.ending ? styles['ending'] : ''} !flex flex-row items-center gap-2`} data-testid="countdown">
+                  <Time size={18} className="opacity-60 shrink-0" />
+                  <span className="truncate">
+                    {listing.status === 'live'
+                      ? remaining.text
+                      : new Date(listing.settledAt ?? listing.endsAt).toLocaleString('en-IN', {
+                          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+                        })}
+                  </span>
                 </p>
                 {listing.status === 'live' && (
-                  <p className="text-small text-slate-500 mt-1">
+                  <p className="text-small text-slate-500" style={{ marginTop: '0.625rem' }}>
                     Anti-snipe: bids in the last
                     {' '}<span className="ledger-num">{listing.antiSnipeWindowSec}s</span>
                     {' extend the close by '}
@@ -277,24 +279,25 @@ export default function ListingDetailPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-spacing-md mt-spacing-lg pt-spacing-md border-t border-slate-100">
+            <div className="listing-detail-metrics border-t border-slate-100"
+                 style={{ marginTop: '2rem', paddingTop: '2rem' }}>
               <KV label="Batch" value={<Link href={`/${locale}/trace/${listing.batchId}`} className="text-primary font-mono">{listing.batchId}</Link>} />
               <KV label="Warehouse" value={listing.warehouseName} />
-              <KV label="Bids placed" value={String(listing.bidCount)} />
-              <KV label="Reserve" value={formatPaiseToINR(listing.reservePricePaise)} />
-              <KV label="Bid increment" value={formatPaiseToINR(listing.bidIncrementPaise)} />
+              <KV label="Bids placed" value={<span className="ledger-num">{listing.bidCount}</span>} />
+              <KV label="Reserve" value={<span className="ledger-num">{formatPaiseToINR(listing.reservePricePaise)}</span>} />
+              <KV label="Bid increment" value={<span className="ledger-num">{formatPaiseToINR(listing.bidIncrementPaise)}</span>} />
               <KV
                 label="Storage tariff"
-                value={`${formatPaiseToINR(listing.storageRatePerKgPerDayPaise)}/kg/day`}
+                value={<span className="ledger-num">{`${formatPaiseToINR(listing.storageRatePerKgPerDayPaise)}/kg/day`}</span>}
               />
               <KV
                 label="Storage cost so far"
-                value={<span data-testid="storage-cost">{formatPaiseToINR(listing.storageCostPaiseLive)}</span>}
+                value={<span className="ledger-num" data-testid="storage-cost">{formatPaiseToINR(listing.storageCostPaiseLive)}</span>}
               />
               <KV
                 label="Net to farmer (projected)"
                 value={
-                  <span data-testid="projected-net">
+                  <span className="ledger-num" data-testid="projected-net">
                     {formatPaiseToINR(listing.projectedNetToFarmerPaise)}
                   </span>
                 }
@@ -302,22 +305,26 @@ export default function ListingDetailPage() {
             </div>
 
             {listing.notes && (
-              <div className="mt-spacing-lg p-spacing-md bg-amber-50 border border-amber-100 rounded-xl">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-amber-700 mb-1">
+              <div className="bg-amber-50/70 border border-amber-100 rounded-2xl"
+                   style={{ marginTop: '2rem', padding: '1.5rem 1.75rem' }}>
+                <p className="text-eyebrow text-amber-700" style={{ marginBottom: '0.625rem' }}>
                   Seller notes
                 </p>
-                <p className="text-body text-amber-900">{listing.notes}</p>
+                <p className="text-body text-amber-900 leading-relaxed" style={{ marginBottom: 0 }}>
+                  {listing.notes}
+                </p>
               </div>
             )}
 
             {listing.status === 'settled' && listing.settlementTxHash && (
               <div
-                className="mt-spacing-lg p-spacing-md bg-emerald-50 border border-emerald-100 rounded-xl"
+                className="bg-emerald-50/70 border border-emerald-100 rounded-2xl"
+                style={{ marginTop: '2rem', padding: '1.5rem 1.75rem' }}
                 data-testid="settlement-anchor"
               >
-                <div className="flex items-center gap-2 mb-3">
-                  <Blockchain size={16} className="text-emerald-700" />
-                  <p className="text-eyebrow text-emerald-800">
+                <div className="!flex flex-row items-center gap-2" style={{ marginBottom: '1rem' }}>
+                  <Blockchain size={18} className="text-emerald-700" />
+                  <p className="text-eyebrow text-emerald-800" style={{ marginBottom: 0 }}>
                     Auction settlement anchored on chain
                   </p>
                 </div>
@@ -326,11 +333,11 @@ export default function ListingDetailPage() {
                   label="Settlement tx"
                   prefetchDetails
                 />
-                <p className="text-small text-emerald-900/80 mt-3">
-                  This receipt is permanent and publicly verifiable. The
-                  &ldquo;View on BaseScan&rdquo; button opens the transaction in the
-                  Base Sepolia explorer; &ldquo;On-chain details&rdquo; reveals the
-                  block, gas used, and confirmations without leaving the app.
+                <p className="text-small text-emerald-900/80 leading-relaxed" style={{ marginTop: '1rem' }}>
+                  This receipt is permanent and publicly verifiable. &ldquo;View on
+                  BaseScan&rdquo; opens the transaction in the Base Sepolia
+                  explorer; &ldquo;On-chain details&rdquo; reveals the block, gas
+                  used, and confirmations without leaving the app.
                 </p>
               </div>
             )}
@@ -477,9 +484,9 @@ export default function ListingDetailPage() {
 
 function KV({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="min-w-0">
-      <p className="text-eyebrow text-slate-400 mb-1">{label}</p>
-      <p className="text-body text-slate-900 truncate">{value}</p>
+    <div className="min-w-0 !flex flex-col" style={{ gap: '0.5rem' }}>
+      <p className="text-eyebrow text-slate-500" style={{ marginBottom: 0 }}>{label}</p>
+      <p className="text-body text-slate-900 truncate font-medium" style={{ marginTop: 0 }}>{value}</p>
     </div>
   );
 }
