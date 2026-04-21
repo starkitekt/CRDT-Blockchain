@@ -66,6 +66,15 @@ const BatchSchema = new Schema(
     // ── Blockchain ───────────────────────────────────────────────────────────
     onChainTxHash: { type: String },
     onChainDataHash: { type: String },
+    onChainStagedId: { type: String },
+    onChainRecorderId: { type: String },
+    onChainAnchorStatus: {
+      type: String,
+      enum: ['pending', 'anchored', 'failed'],
+      default: 'pending',
+    },
+    onChainAnchorError: { type: String },
+    onChainAnchorAttempts: { type: Number, default: 0 },
     blockchainAnchoredAt: { type: Date },
     blockchainNetwork: { type: String },
     _payloadHash: { type: String, index: true, sparse: true },

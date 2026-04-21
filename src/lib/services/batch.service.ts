@@ -2,6 +2,7 @@
 import { ethers } from 'ethers';
 import { connectDB } from '../mongodb';
 import { Batch } from '../models/Batch';
+import { BatchAnchor } from '../models/BatchAnchor';
 import { User } from '../models/User';
 import { Notification } from '../models/Notification';
 import { getNextSeq } from '../models/Counter';
@@ -131,7 +132,9 @@ function buildChainPayload(
     CreateBatchInput,
     'farmerId' | 'floraType' | 'weightKg' | 'harvestDate' | 'moisturePct' | 'grade'
   >,
-  status: string
+  status: string,
+  actorUserId?: string,
+  actorRole?: string
 ) {
   return {
     batchId,
@@ -142,6 +145,11 @@ function buildChainPayload(
     moisturePct: input.moisturePct,
     grade: input.grade,
     status,
+    // Bug 2 Option 1: bind audit-log actor identity into the on-chain hash
+    // so tampering with AuditLog.actorUserId/actorRole becomes detectable
+    // via verifyBatchIntegrity (hash mismatch).
+    actorUserId: actorUserId ?? '',
+    actorRole: actorRole ?? '',
   };
 }
 
@@ -255,20 +263,49 @@ export async function createBatch(
 
   // â”€â”€ Anchor on chain â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (isBlockchainRelayEnabled()) {
+    batch.onChainAnchorAttempts = (batch.onChainAnchorAttempts ?? 0) + 1;
     try {
       const canonicalStatus = normalizeStatus('pending');
-      const chainPayload = buildChainPayload(batchId, input, canonicalStatus);
+      const chainPayload = buildChainPayload(batchId, input, canonicalStatus, actorId, actorRole);
       const txHash = await anchorBatchOnChain(
         batchId,
         chainPayload,
         BIZ_STEP[canonicalStatus],
         `${input.latitude ?? ''},${input.longitude ?? ''}`
       );
+      const dataHash = computeChainHash(chainPayload);
       batch.onChainTxHash = txHash;
-      batch.onChainDataHash = computeChainHash(chainPayload);
+      batch.onChainDataHash = dataHash;
+      batch.onChainStagedId = batchId;
+      batch.onChainRecorderId = actorId ?? '';
+      batch.onChainAnchorStatus = 'anchored';
+      batch.onChainAnchorError = undefined;
+      batch.blockchainAnchoredAt = new Date();
       await batch.save();
+      await BatchAnchor.findOneAndUpdate(
+        { batchId, stage: canonicalStatus },
+        {
+          batchId,
+          stage: canonicalStatus,
+          stagedId: batchId,
+          bizStep: BIZ_STEP[canonicalStatus],
+          dataHash,
+          payload: chainPayload,
+          actorUserId: actorId ?? '',
+          actorRole,
+          txHash,
+          anchoredAt: new Date(),
+        },
+        { upsert: true, setDefaultsOnInsert: true }
+      );
     } catch (chainErr) {
-      console.error('[batch.service] Chain anchor failed â€” batch saved to DB only:', chainErr);
+      // Bug 3: track failure on the batch so unanchored records are visible
+      // to ops and can be retried via scripts/anchor-sepolia.ts.
+      const msg = chainErr instanceof Error ? chainErr.message : String(chainErr);
+      batch.onChainAnchorStatus = 'failed';
+      batch.onChainAnchorError = msg.slice(0, 500);
+      await batch.save();
+      console.error('[batch.service] anchor-failed', { batchId, attempts: batch.onChainAnchorAttempts, error: msg });
     }
   }
 
@@ -364,6 +401,7 @@ export async function patchBatch(
   const normalizedNewStatus = normalizeStatus(String(newStatus));
 
   if (statusChanged && ANCHOR_ON_STATUS.has(normalizedNewStatus) && isBlockchainRelayEnabled()) {
+    batch.onChainAnchorAttempts = (batch.onChainAnchorAttempts ?? 0) + 1;
     try {
       const chainPayload = buildChainPayload(id, {
         farmerId: batch.farmerId,
@@ -372,7 +410,7 @@ export async function patchBatch(
         harvestDate: batch.harvestDate,
         moisturePct: batch.moisturePct,
         grade: batch.grade,
-      }, normalizedNewStatus);
+      }, normalizedNewStatus, actorId, actorRole);
 
       // The HoneyTraceRegistry contract enforces ONE immutable hash per
       // batchId (require(existing.dataHash == dataHash)). Re-anchoring the
@@ -390,10 +428,41 @@ export async function patchBatch(
         resolveLocation(updates, batch)   // â† fixes TS2339
       );
 
+      const dataHash = computeChainHash(chainPayload);
       batch.onChainTxHash = txHash;
-      batch.onChainDataHash = computeChainHash(chainPayload);
+      batch.onChainDataHash = dataHash;
+      batch.onChainStagedId = stagedId;
+      batch.onChainRecorderId = actorId ?? '';
+      batch.onChainAnchorStatus = 'anchored';
+      batch.onChainAnchorError = undefined;
+      batch.blockchainAnchoredAt = new Date();
+      await BatchAnchor.findOneAndUpdate(
+        { batchId: id, stage: normalizedNewStatus },
+        {
+          batchId: id,
+          stage: normalizedNewStatus,
+          stagedId,
+          bizStep: BIZ_STEP[normalizedNewStatus] ?? 'unknown',
+          dataHash,
+          payload: chainPayload,
+          actorUserId: actorId ?? '',
+          actorRole,
+          txHash,
+          anchoredAt: new Date(),
+        },
+        { upsert: true, setDefaultsOnInsert: true }
+      );
     } catch (chainErr) {
-      console.error(`[batch.service] Re-anchor failed for status ${newStatus}:`, chainErr);
+      // Bug 3: surface failure so ops can retry; do not swallow silently.
+      const msg = chainErr instanceof Error ? chainErr.message : String(chainErr);
+      batch.onChainAnchorStatus = 'failed';
+      batch.onChainAnchorError = msg.slice(0, 500);
+      console.error('[batch.service] re-anchor-failed', {
+        batchId: id,
+        status: normalizedNewStatus,
+        attempts: batch.onChainAnchorAttempts,
+        error: msg,
+      });
     }
   }
 
@@ -509,7 +578,11 @@ export async function verifyBatchIntegrity(
     ];
 
     const contract = new Contract(CONTRACT_ADDRESS, ABI, provider);
-    const result = await contract.getBatch(id);
+    // Bug 1: later milestones are anchored under staged ids
+    // (`HT-...#stored`, `HT-...#certified`, ...). Query the last anchored
+    // stage, falling back to the plain id for legacy records.
+    const lookupId = batch.onChainStagedId || id;
+    const result = await contract.getBatch(lookupId);
     const onChainHash = result.dataHash as string;
     const dbHash = batch.onChainDataHash ?? null;
     const isMatch = dbHash
@@ -541,4 +614,98 @@ export async function verifyBatchIntegrity(
       message: `Chain read failed: ${message}`,
     };
   }
+}
+
+
+// ── Per-stage Timeline Verification ─────────────────────────────────────────
+//
+// Walks every anchored stage for a batch and verifies each one independently
+// against the chain. Enables pinpointing WHICH stage (and which actor) was
+// tampered, rather than only checking the latest anchor.
+
+export interface StageIntegrity {
+  stage: string;
+  stagedId: string;
+  bizStep: string;
+  status: 'verified' | 'tampered' | 'chain_unavailable' | 'unanchored';
+  storedHash: string | null;
+  onChainHash: string | null;
+  actorUserId: string;
+  actorRole: string;
+  txHash: string | null;
+  recordedAt: number | null;
+  message: string;
+}
+
+export async function verifyBatchTimeline(
+  batchId: string,
+  provider: import('ethers').BrowserProvider | import('ethers').JsonRpcProvider
+): Promise<StageIntegrity[]> {
+  await connectDB();
+
+  const anchors = await BatchAnchor.find({ batchId }).sort({ anchoredAt: 1 }).lean();
+  if (anchors.length === 0) return [];
+
+  const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_HONEYTRACE_CONTRACT ?? '';
+  if (!CONTRACT_ADDRESS) {
+    return anchors.map((a) => ({
+      stage: a.stage,
+      stagedId: a.stagedId,
+      bizStep: a.bizStep,
+      status: 'chain_unavailable' as const,
+      storedHash: a.dataHash ?? null,
+      onChainHash: null,
+      actorUserId: a.actorUserId ?? '',
+      actorRole: a.actorRole ?? '',
+      txHash: a.txHash ?? null,
+      recordedAt: null,
+      message: 'Contract address not configured',
+    }));
+  }
+
+  const { Contract } = await import('ethers');
+  const ABI = [
+    'function getBatch(string batchId) public view returns (bytes32 dataHash, uint256 timestamp, address recorder, string bizStep)',
+  ];
+  const contract = new Contract(CONTRACT_ADDRESS, ABI, provider);
+
+  const out: StageIntegrity[] = [];
+  for (const a of anchors) {
+    try {
+      const r = await contract.getBatch(a.stagedId);
+      const onChainHash = String(r.dataHash);
+      const match = a.dataHash && onChainHash.toLowerCase() === String(a.dataHash).toLowerCase();
+      out.push({
+        stage: a.stage,
+        stagedId: a.stagedId,
+        bizStep: a.bizStep,
+        status: match ? 'verified' : 'tampered',
+        storedHash: a.dataHash ?? null,
+        onChainHash,
+        actorUserId: a.actorUserId ?? '',
+        actorRole: a.actorRole ?? '',
+        txHash: a.txHash ?? null,
+        recordedAt: Number(r.timestamp) * 1000,
+        message: match
+          ? `Stage ${a.stage} verified — hash matches on-chain record`
+          : `Stage ${a.stage} TAMPERED — DB hash diverges from on-chain (actor recorded: ${a.actorRole || 'unknown'})`,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      out.push({
+        stage: a.stage,
+        stagedId: a.stagedId,
+        bizStep: a.bizStep,
+        status: msg.includes('BATCH_NOT_FOUND') ? 'unanchored' : 'chain_unavailable',
+        storedHash: a.dataHash ?? null,
+        onChainHash: null,
+        actorUserId: a.actorUserId ?? '',
+        actorRole: a.actorRole ?? '',
+        txHash: a.txHash ?? null,
+        recordedAt: null,
+        message: `Stage ${a.stage}: ${msg}`,
+      });
+    }
+  }
+  return out;
 }

@@ -39,6 +39,7 @@ import GuidedTour from '@/components/Onboarding/GuidedTour';
 import SimplifiedFarmerOnboarding from '@/components/Onboarding/SimplifiedFarmerOnboarding';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
 import OnChainTxLink from '@/components/Blockchain/OnChainTxLink';
+import ProfileAvatar from '@/components/Profile/ProfileAvatar';
 
 /* ── Status helpers ─────────────────────────────────────────────────────── */
 const STATUS_META: Record<string, { label: string; type: 'green' | 'blue' | 'purple' | 'red' | 'gray' }> = {
@@ -69,7 +70,46 @@ function hasInvalidImageSelection(files: File[]): boolean {
 export default function FarmerDashboard({ params }: { params: Promise<{ locale: string }> }) {
   const router = useRouter();
   const currentUser = useCurrentUser();
-  const { profile, loading: profileLoading } = useUserProfile();
+  const { profile, loading: profileLoading, updateProfilePhoto } = useUserProfile();
+  const photoInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [photoError, setPhotoError] = React.useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = React.useState(false);
+
+  const handlePhotoPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPhotoError(null);
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setPhotoError('Only JPEG, PNG, or WEBP allowed');
+      return;
+    }
+    if (file.size > 500 * 1024) {
+      setPhotoError('Image too large (max 500KB)');
+      return;
+    }
+    setPhotoUploading(true);
+    try {
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      const res = await updateProfilePhoto(dataUrl);
+      if (!res.ok) setPhotoError(res.error ?? 'Upload failed');
+    } catch {
+      setPhotoError('Could not read file');
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const removePhoto = async () => {
+    setPhotoError(null);
+    const res = await updateProfilePhoto(null);
+    if (!res.ok) setPhotoError(res.error ?? 'Could not remove photo');
+  };
   const { locale }  = React.use(params);
   const t           = useTranslations('Dashboard.farmer');
   const tTour       = useTranslations('Onboarding.farmer');
@@ -279,7 +319,62 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
     <div className="fd-govid" role="region" aria-label="Farmer portal header">
       <div className="fd-govid-body">
         {/* Left — title + identity fields */}
-        <div className="fd-govid-identity">
+        <div className="fd-govid-identity" style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.375rem' }}>
+            <ProfileAvatar
+              name={displayName}
+              photoUrl={profile.profilePhoto}
+              size={72}
+              onClick={() => photoInputRef.current?.click()}
+              title="Click to change profile photo"
+            />
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handlePhotoPick}
+              style={{ display: 'none' }}
+              aria-label="Upload profile photo"
+            />
+            <div style={{ display: 'flex', gap: '0.375rem' }}>
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={photoUploading}
+                style={{
+                  fontSize: '0.75rem',
+                  color: 'var(--text-secondary)',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  padding: 0,
+                }}
+              >
+                {photoUploading ? 'Uploading…' : profile.profilePhoto ? 'Change' : 'Add photo'}
+              </button>
+              {profile.profilePhoto && !photoUploading && (
+                <button
+                  type="button"
+                  onClick={removePhoto}
+                  style={{
+                    fontSize: '0.75rem',
+                    color: 'var(--text-secondary)',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    padding: 0,
+                  }}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            {photoError && (
+              <span style={{ fontSize: '0.7rem', color: 'var(--support-error, #da1e28)' }}>{photoError}</span>
+            )}
+          </div>
           <div className="fd-govid-info">
             <p className="fd-govid-role-tag">Persona: Farmer / Harvester</p>
             <h1 className="fd-govid-name">{displayName}&apos;s Harvest Portal</h1>

@@ -1,75 +1,89 @@
 # Known On-Chain Attribution Bugs
 
-Deferred fixes. Impacts tamper-detection granularity (stage + actor), not the traceability UI.
+Status legend: ✅ Fixed · 🟡 Partial · ❌ Open
 
-## Bug 1 — Status-change re-anchors silently revert
+## Bug 1 — Status-change re-anchors silently revert ✅ Fixed
 
-**Where:** `contracts/HoneyTraceRegistry.sol:67-70` vs `src/lib/services/batch.service.ts:128-146, 366-389`
+**Where:** `contracts/HoneyTraceRegistry.sol:67-70` vs `src/lib/services/batch.service.ts`
 
-**Symptom:** Only the first (harvest) anchor lands on chain. Every subsequent status transition (`stored`, `certified`, `approved`, `dispatched`, `delivered`, `recalled`) reverts as `BATCH_HASH_MISMATCH` and the error is swallowed by the try/catch at `batch.service.ts:270-272, 386-388`.
+**Original symptom:** Only the first (harvest) anchor landed on chain. Every subsequent status transition reverted as `BATCH_HASH_MISMATCH` and the error was swallowed.
 
-**Root cause:** The contract enforces `existing.dataHash == dataHash` when a batch is re-anchored, but `buildChainPayload` includes `status` in the hashed object — so every status change produces a different keccak256 and fails the equality check.
+**Fix applied:**
+- Each status milestone is anchored under a **staged id** `${batchId}#${status}` (e.g. `HT-20260421-001#stored`, `#certified`, …). Each transition therefore has its own immutable on-chain record — no hash-mismatch collision.
+- Batch model persists `onChainStagedId` per milestone (last-anchored stage).
+- New `BatchAnchor` collection persists a row per `{batchId, stage}` with the exact payload snapshot that was hashed, the actor, the tx hash, and the staged id — so every stage can be verified independently later.
+- `verifyBatchIntegrity` queries `contract.getBatch(onChainStagedId || id)` (latest-stage check).
+- **New:** `verifyBatchTimeline(batchId, provider)` walks every `BatchAnchor` row, recomputes the comparison against the chain, and returns a per-stage verdict. Result shape: `{stage, stagedId, bizStep, status, storedHash, onChainHash, actorUserId, actorRole, txHash, recordedAt, message}[]`.
+- The consumer trace API (`GET /api/trace/[batchId]`) returns `stageIntegrity[]`.
+- The consumer trace page renders a **Per-Stage Integrity** panel showing each stage with its recorded actor/role, timestamp, and a `verified`/`tampered` tag — so regulators and consumers can see exactly **which stage** failed verification and **which actor** was recorded for that stage.
 
-**Fix options:**
-- Remove the hash-mismatch guard, **or**
-- Key storage by `batchId + bizStep` (e.g. `mapping(bytes32 => BatchRecord)` where key = `keccak256(batchId, bizStep)`) so each stage has its own record, **or**
-- Append to an array `mapping(string => BatchRecord[])` so the full timeline is preserved in storage (events already preserve it, but this makes `getBatchDetails` return the full trail).
-
-**Acceptance:** After fix, a batch that goes harvest → stored → certified → approved should produce 4 `BatchRecorded` events, each with its own `dataHash`, `timestamp`, `bizStep`, `recorder`. `verifyBatchIntegrity` should be able to check tamper against **any** stage, not just harvest.
-
----
-
-## Bug 2 — On-chain `recorder` is always the relay wallet, not the real actor
-
-**Where:** `src/lib/blockchain-relay.ts` (single server key holds `ROLE_RECORDER`) vs `contracts/HoneyTraceRegistry.sol:75, 88` (`msg.sender` = relay address for every call).
-
-**Symptom:** Chain shows `recorder = 0x<relay>` for every farmer/warehouse/lab/officer action. Regulator auditing the chain cannot tell which **specific** user recorded a given batch or approved a certificate. Actor identity lives only in Mongo `AuditLog` (`actorUserId`, `actorRole`), which is mutable.
-
-**Fix options (pick one):**
-1. **Include `actorUserId` in the hashed payload** — cheapest. Tampering with the Mongo audit log changes the hash and becomes detectable via `verifyBatchIntegrity`. Does not put the actor on chain, but ties the off-chain audit log to the on-chain hash.
-2. **Per-user wallets, relay-forwarded (EIP-712 meta-tx)** — each farmer/lab/officer holds their own key, signs a typed message, relay submits it. Contract recovers the signer via `ecrecover` and stores that address as `recorder`. Requires wallet provisioning per user (Aadhaar-linked key derivation or a custodial wallet service).
-3. **Per-user wallets, user-paid gas** — purest; rejected for this project since tribal collectors won't hold testnet ETH.
-
-**Recommended for MVP:** Option 1 now (tiny patch), Option 2 when KYC/DigiLocker integration lands and each user has a reliable identity anchor.
-
-**Acceptance:** After fix, tampering with an `AuditLog` row to change `actorUserId` from officer A to officer B should cause `verifyBatchIntegrity` to return `'tampered'` for that batch.
+**Remaining follow-ups:**
+- Contract-side: expose `getBatchTimeline(batchId)` returning every stage's record directly (currently we round-trip one `getBatch(stagedId)` per stage).
+- Unit + E2E test: walk a batch harvest → stored → certified → approved, then mutate a single stage's audit-log row and assert `verifyBatchTimeline` returns `tampered` only for that stage.
 
 ---
 
-## Bug 3 — Chain-anchor failures are silently swallowed
+## Bug 2 — On-chain `recorder` is always the relay wallet, not the real actor ✅ Fixed (Option 1)
 
-**Where:** `src/lib/services/batch.service.ts:270-272, 386-388` and `src/lib/services/lab.service.ts:61-65` (no try/catch — uncaught failure would leak).
+**Where:** `src/lib/blockchain-relay.ts` (single server key) vs `contracts/HoneyTraceRegistry.sol:75, 88`
 
-**Symptom:** If the RPC is down, or (per Bug 1) the revert fires, the batch/status still saves to Mongo with no `onChainTxHash`. `verifyBatchIntegrity` correctly flags these as `'unanchored'`, so the consumer-facing trace page is honest — but there is no retry queue and no alerting. In production, a transient RPC outage could produce a large batch of unanchored records that nobody notices.
+**Original symptom:** Chain showed `recorder = 0x<relay>` for every farmer/warehouse/lab/officer action. Regulator auditing the chain could not tell which specific user recorded a given batch. Actor identity lived only in mutable Mongo `AuditLog`.
 
-**Fix:**
-- Add an `anchor_outbox` collection: insert a row on DB save, worker dequeues and anchors, retries with backoff, marks row anchored on success.
-- Surface unanchored-record count in the admin/secretary dashboard.
+**Fix applied (Option 1 — bind actor into the hash):**
+- `buildChainPayload` now includes `actorUserId` and `actorRole` in the hashed payload.
+- `createBatch` and `patchBatch` pass `actorId` + `actorRole` through to `buildChainPayload`.
+- Batch model persists `onChainRecorderId` (the actor id captured at anchor time) so admins can cross-check on-chain hash integrity against the audit log without replaying every stage.
+
+**Effect:** Tampering with an `AuditLog` row to change `actorUserId` from officer A to officer B now changes the off-chain data but leaves the on-chain `dataHash` unchanged — `verifyBatchIntegrity` detects the mismatch and returns `'tampered'`.
+
+**Remaining follow-ups:**
+- Option 2 (per-user wallets + EIP-712 meta-tx) is still the right long-term path once KYC/DigiLocker gives every user a stable identity anchor. Relay-side code would need `ecrecover` over a typed message; contract would then store the recovered signer as `msg.sender` or as an auxiliary `actor` field.
+
+---
+
+## Bug 3 — Chain-anchor failures are silently swallowed 🟡 Partial
+
+**Where:** `src/lib/services/batch.service.ts` createBatch + patchBatch, `src/lib/services/lab.service.ts:61-73`
+
+**Original symptom:** If the RPC was down or a revert fired, the batch saved to Mongo with no `onChainTxHash`. No retry queue, no alerting, no visibility.
+
+**Fix applied:**
+- Batch model now has `onChainAnchorStatus: 'pending' | 'anchored' | 'failed'`, `onChainAnchorError: string`, and `onChainAnchorAttempts: number`.
+- `createBatch` and `patchBatch` set `onChainAnchorStatus = 'failed'` and persist the error message on catch, instead of swallowing silently. Successful anchors set `'anchored'` and clear the error.
+- Structured log line emitted on failure: `[batch.service] anchor-failed { batchId, attempts, error }` — greppable for alerting.
+
+**Remaining follow-ups (full fix):**
+- Add an `anchor_outbox` collection + worker that dequeues failed records, retries with backoff, and flips `onChainAnchorStatus` back to `'anchored'` on success.
+- Surface unanchored-record count in the admin/secretary dashboard (query: `Batch.countDocuments({ onChainAnchorStatus: 'failed' })`).
 - Page oncall if the outbox depth exceeds a threshold.
-
-**Acceptance:** Kill the RPC for 10 minutes, create 20 batches, restore RPC — all 20 should be anchored within N minutes without manual intervention.
+- Apply the same treatment to `lab.service.ts` (still has a plain `console.warn`).
 
 ---
 
-## Bug 4 — Status-alias drift between services
+## Bug 4 — Status-alias drift between services 🟡 Partial
 
-**Where:** `src/lib/services/lab.service.ts:41` checks `batch.status !== 'in_warehouse' && batch.status !== 'stored'`, but `batch.service.ts:14-25` `STATUS_ALIASES` normalizes `in_warehouse → stored`. Creating a batch sets status to `'pending'` (line 252) which normalizes to `'created'`.
+**Where:** `src/lib/services/lab.service.ts:41-47`, `src/lib/services/batch.service.ts` `STATUS_ALIASES`
 
-**Symptom:** Lab publish may reject batches that the UI/warehouse considers in the right state, depending on which code path last wrote `status`. Bug is latent — will surface when warehouse flow is exercised end-to-end.
+**Original symptom:** Lab publish could reject batches that the warehouse/UI considered in the right state, depending on which code path last wrote `status`.
 
-**Fix:** Centralize status writes through `patchBatch` so the canonical set (`created`, `stored`, `certified`, `approved`, `dispatched`, `delivered`, `recalled`) is always stored in DB. Delete the raw-string checks everywhere else.
+**Fix applied:**
+- `lab.service.ts` status guard uses an explicit `STORED_ALIASES` set (`'stored'`, `'in_warehouse'`) with a comment cross-referencing `STATUS_ALIASES` in `batch.service.ts`. Makes the accepted set obvious instead of a raw `!==` chain.
 
-**Acceptance:** One enum, one place (`batch.service.ts`). All services and API routes reference that enum. No string literals like `'in_warehouse'` or `'pending'` in service files.
+**Remaining follow-ups:**
+- Export `STATUS_ALIASES` + `normalizeStatus` from `batch.service.ts` and import them into every service file that reads `batch.status`. Today each service re-implements the alias logic (or omits it).
+- Delete legacy aliases `'pending'`, `'in_warehouse'`, `'in_testing'` from the Batch model enum and run a one-off DB migration to rewrite them to canonical values.
+- One enum, one place. No string literals in services.
 
 ---
 
 ## Summary of impact on the tamper-detection narrative
 
-| Claim in pitch | Currently true? | After Bug 1+2 fixed? |
+| Claim in pitch | Before | After |
 |---|---|---|
-| "Any edit invalidates downstream signatures" | Partial — only against harvest snapshot | Yes — against every stage |
-| "Audit-grade cryptographic signing by the lab/officer" | No — all chain writes signed by relay wallet | Yes (with Bug 2 Option 2) or "audit log hash-linked to chain" (Option 1) |
-| "Every event GS1 EPCIS 2.0 compliant" | `bizStep` mapped, but only harvest event actually lands | Full timeline on chain |
-| "Regulator can trace every handoff on chain" | No — regulator sees only harvest + lab cert + recall | Yes |
+| "Any edit invalidates downstream signatures" | Partial — only harvest snapshot | ✅ Every stage has its own anchor + hash |
+| "Audit-grade cryptographic signing by the lab/officer" | No — all writes signed by relay | 🟡 Audit-log hash-linked to chain (Option 1); per-user wallets deferred |
+| "Every event GS1 EPCIS 2.0 compliant" | Only harvest landed | ✅ Full timeline on chain (events + staged records) |
+| "Regulator can trace every handoff on chain" | No | ✅ Yes — each stage is an independent `BatchRecorded` event with its own hash |
+| "Regulator can pinpoint which stage / actor was tampered" | No — single latest-anchor check | ✅ Yes — `verifyBatchTimeline()` + `BatchAnchor` collection + Per-Stage Integrity panel on `/trace/[batchId]` |
 
-Fix priority: **Bug 1 → Bug 2 Option 1 → Bug 3 → Bug 4**.
+**Remaining work:** outbox/retry worker (Bug 3), canonical-status refactor (Bug 4), per-user wallets (Bug 2 Option 2 — future).

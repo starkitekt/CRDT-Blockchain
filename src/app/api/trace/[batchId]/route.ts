@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
-import { getBatchById, computeChainHash } from '@/lib/services/batch.service';
+import { getBatchById, computeChainHash, verifyBatchTimeline, StageIntegrity } from '@/lib/services/batch.service';
 import { connectDB } from '@/lib/mongodb';
 import { AuditLog } from '@/lib/models/AuditLog';
 import { User } from '@/lib/models/User';
@@ -216,9 +216,11 @@ export async function GET(
     network: resolveNetworkLabel(),
   };
 
+  let stageIntegrity: StageIntegrity[] = [];
   if (CONTRACT_ADDRESS) {
     try {
       const provider = getProvider();
+      stageIntegrity = await verifyBatchTimeline(batchId, provider);
       const contract = new ethers.Contract(CONTRACT_ADDRESS, REGISTRY_ABI, provider);
       const [dataHash, timestamp, recorder, bizStep] = await contract.getBatch(batchId);
       const recalled = await contract.isRecalled(batchId);
@@ -274,6 +276,7 @@ export async function GET(
         }
       : null,
     officerDecision,
+    stageIntegrity,
     meta: { fetchedAt: new Date().toISOString(), batchId },
   });
 }

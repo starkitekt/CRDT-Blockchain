@@ -38,7 +38,11 @@ export async function publishLabResult(
     throw new Error('BATCH_NOT_FOUND');
   }
 
-  if (batch.status !== 'in_warehouse' && batch.status !== 'stored') {
+  // Bug 4: canonical statuses are defined in batch.service STATUS_ALIASES;
+  // accept any alias that normalizes to 'stored' so we don't reject batches
+  // the rest of the system considers in the right state.
+  const STORED_ALIASES = new Set(['stored', 'in_warehouse']);
+  if (!STORED_ALIASES.has(String(batch.status))) {
     throw new Error('BATCH_NOT_IN_WAREHOUSE');
   }
 
