@@ -9,13 +9,17 @@ Status legend: ✅ Fixed · 🟡 Partial · ❌ Open
 **Original symptom:** Only the first (harvest) anchor landed on chain. Every subsequent status transition reverted as `BATCH_HASH_MISMATCH` and the error was swallowed.
 
 **Fix applied:**
-- Each status milestone is anchored under a **staged id** `${batchId}#${status}` (e.g. `HT-20260421-001#stored`, `#certified`, …). Each transition therefore has its own immutable on-chain record — no hash-mismatch collision. (`batch.service.ts` patchBatch)
-- Batch model now persists `onChainStagedId` per milestone (last-anchored stage).
-- `verifyBatchIntegrity` now queries `contract.getBatch(onChainStagedId || id)` — previously it always queried the plain parent id and reported "tampered" for any status beyond harvest.
+- Each status milestone is anchored under a **staged id** `${batchId}#${status}` (e.g. `HT-20260421-001#stored`, `#certified`, …). Each transition therefore has its own immutable on-chain record — no hash-mismatch collision.
+- Batch model persists `onChainStagedId` per milestone (last-anchored stage).
+- New `BatchAnchor` collection persists a row per `{batchId, stage}` with the exact payload snapshot that was hashed, the actor, the tx hash, and the staged id — so every stage can be verified independently later.
+- `verifyBatchIntegrity` queries `contract.getBatch(onChainStagedId || id)` (latest-stage check).
+- **New:** `verifyBatchTimeline(batchId, provider)` walks every `BatchAnchor` row, recomputes the comparison against the chain, and returns a per-stage verdict. Result shape: `{stage, stagedId, bizStep, status, storedHash, onChainHash, actorUserId, actorRole, txHash, recordedAt, message}[]`.
+- The consumer trace API (`GET /api/trace/[batchId]`) returns `stageIntegrity[]`.
+- The consumer trace page renders a **Per-Stage Integrity** panel showing each stage with its recorded actor/role, timestamp, and a `verified`/`tampered` tag — so regulators and consumers can see exactly **which stage** failed verification and **which actor** was recorded for that stage.
 
 **Remaining follow-ups:**
-- Contract-side: expose a `getBatchTimeline(batchId)` that returns every stage's record. Today the full timeline lives only in event logs; `getBatch` still returns a single record keyed by the staged id.
-- Add a unit test that walks a batch through harvest → stored → certified → approved and asserts 4 distinct `BatchRecorded` events are emitted and all 4 `verifyBatchIntegrity` checks pass.
+- Contract-side: expose `getBatchTimeline(batchId)` returning every stage's record directly (currently we round-trip one `getBatch(stagedId)` per stage).
+- Unit + E2E test: walk a batch harvest → stored → certified → approved, then mutate a single stage's audit-log row and assert `verifyBatchTimeline` returns `tampered` only for that stage.
 
 ---
 
@@ -80,5 +84,6 @@ Status legend: ✅ Fixed · 🟡 Partial · ❌ Open
 | "Audit-grade cryptographic signing by the lab/officer" | No — all writes signed by relay | 🟡 Audit-log hash-linked to chain (Option 1); per-user wallets deferred |
 | "Every event GS1 EPCIS 2.0 compliant" | Only harvest landed | ✅ Full timeline on chain (events + staged records) |
 | "Regulator can trace every handoff on chain" | No | ✅ Yes — each stage is an independent `BatchRecorded` event with its own hash |
+| "Regulator can pinpoint which stage / actor was tampered" | No — single latest-anchor check | ✅ Yes — `verifyBatchTimeline()` + `BatchAnchor` collection + Per-Stage Integrity panel on `/trace/[batchId]` |
 
 **Remaining work:** outbox/retry worker (Bug 3), canonical-status refactor (Bug 4), per-user wallets (Bug 2 Option 2 — future).

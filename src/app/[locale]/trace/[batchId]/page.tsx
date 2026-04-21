@@ -65,10 +65,25 @@ interface BlockchainData {
   network?: string;
 }
 
+interface StageIntegrity {
+  stage: string;
+  stagedId: string;
+  bizStep: string;
+  status: 'verified' | 'tampered' | 'chain_unavailable' | 'unanchored';
+  storedHash: string | null;
+  onChainHash: string | null;
+  actorUserId: string;
+  actorRole: string;
+  txHash: string | null;
+  recordedAt: number | null;
+  message: string;
+}
+
 interface TraceResponse {
   batch: BatchData;
   blockchain: BlockchainData;
   timeline: TraceEvent[];
+  stageIntegrity?: StageIntegrity[];
   warehouse?: { id: string; name: string | null; location: string | null } | null;
   testing?: {
     moisture: number | null;
@@ -177,7 +192,7 @@ export default function PublicTracePage({ params }: { params: Promise<{ batchId:
     );
   }
 
-  const { batch, timeline, blockchain, warehouse, testing, officerDecision } = data;
+  const { batch, timeline, blockchain, warehouse, testing, officerDecision, stageIntegrity } = data;
   const isRecalled = blockchain.recalls?.length > 0;
   const images = Array.isArray(batch.images) ? batch.images : [];
 
@@ -489,6 +504,72 @@ export default function PublicTracePage({ params }: { params: Promise<{ batchId:
 
           </Stack>
         </div>
+
+        {stageIntegrity && stageIntegrity.length > 0 && (
+          <Tile className="glass-panel" style={{ padding: '1.25rem' }}>
+            <Stack gap={4}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Security size={20} />
+                <h2 className="text-h2" style={{ fontSize: '1.125rem', margin: 0 }}>
+                  Per-Stage Integrity
+                </h2>
+                <Tag type={stageIntegrity.every((s) => s.status === 'verified') ? 'green' : 'red'} size="sm">
+                  {stageIntegrity.filter((s) => s.status === 'verified').length} / {stageIntegrity.length} verified
+                </Tag>
+              </div>
+              <p className="text-sm" style={{ color: 'var(--text-secondary)', margin: 0 }}>
+                Every supply-chain milestone is anchored on-chain with its own hash and actor. Any edit to a
+                specific stage&apos;s data or recorded actor flips that row to <strong>TAMPERED</strong>.
+              </p>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border-subtle)' }}>
+                      <th style={{ padding: '0.5rem' }}>Stage</th>
+                      <th style={{ padding: '0.5rem' }}>BizStep</th>
+                      <th style={{ padding: '0.5rem' }}>Actor (role)</th>
+                      <th style={{ padding: '0.5rem' }}>Recorded</th>
+                      <th style={{ padding: '0.5rem' }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stageIntegrity.map((s) => (
+                      <tr key={s.stagedId} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                        <td style={{ padding: '0.5rem', fontWeight: 600 }}>{s.stage}</td>
+                        <td style={{ padding: '0.5rem', color: 'var(--text-secondary)' }}>{s.bizStep}</td>
+                        <td style={{ padding: '0.5rem' }}>
+                          {s.actorRole || '—'}
+                          {s.actorUserId ? (
+                            <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', display: 'block' }}>
+                              {s.actorUserId.slice(0, 10)}…
+                            </span>
+                          ) : null}
+                        </td>
+                        <td style={{ padding: '0.5rem', color: 'var(--text-secondary)' }}>
+                          {s.recordedAt ? new Date(s.recordedAt).toLocaleString('en-IN') : '—'}
+                        </td>
+                        <td style={{ padding: '0.5rem' }}>
+                          <Tag
+                            type={
+                              s.status === 'verified'
+                                ? 'green'
+                                : s.status === 'tampered'
+                                ? 'red'
+                                : 'gray'
+                            }
+                            size="sm"
+                          >
+                            {s.status}
+                          </Tag>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Stack>
+          </Tile>
+        )}
       </Stack>
     </div>
   );

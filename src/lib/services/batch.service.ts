@@ -2,6 +2,7 @@
 import { ethers } from 'ethers';
 import { connectDB } from '../mongodb';
 import { Batch } from '../models/Batch';
+import { BatchAnchor } from '../models/BatchAnchor';
 import { User } from '../models/User';
 import { Notification } from '../models/Notification';
 import { getNextSeq } from '../models/Counter';
@@ -272,14 +273,31 @@ export async function createBatch(
         BIZ_STEP[canonicalStatus],
         `${input.latitude ?? ''},${input.longitude ?? ''}`
       );
+      const dataHash = computeChainHash(chainPayload);
       batch.onChainTxHash = txHash;
-      batch.onChainDataHash = computeChainHash(chainPayload);
+      batch.onChainDataHash = dataHash;
       batch.onChainStagedId = batchId;
       batch.onChainRecorderId = actorId ?? '';
       batch.onChainAnchorStatus = 'anchored';
       batch.onChainAnchorError = undefined;
       batch.blockchainAnchoredAt = new Date();
       await batch.save();
+      await BatchAnchor.findOneAndUpdate(
+        { batchId, stage: canonicalStatus },
+        {
+          batchId,
+          stage: canonicalStatus,
+          stagedId: batchId,
+          bizStep: BIZ_STEP[canonicalStatus],
+          dataHash,
+          payload: chainPayload,
+          actorUserId: actorId ?? '',
+          actorRole,
+          txHash,
+          anchoredAt: new Date(),
+        },
+        { upsert: true, setDefaultsOnInsert: true }
+      );
     } catch (chainErr) {
       // Bug 3: track failure on the batch so unanchored records are visible
       // to ops and can be retried via scripts/anchor-sepolia.ts.
@@ -410,13 +428,30 @@ export async function patchBatch(
         resolveLocation(updates, batch)   // â† fixes TS2339
       );
 
+      const dataHash = computeChainHash(chainPayload);
       batch.onChainTxHash = txHash;
-      batch.onChainDataHash = computeChainHash(chainPayload);
+      batch.onChainDataHash = dataHash;
       batch.onChainStagedId = stagedId;
       batch.onChainRecorderId = actorId ?? '';
       batch.onChainAnchorStatus = 'anchored';
       batch.onChainAnchorError = undefined;
       batch.blockchainAnchoredAt = new Date();
+      await BatchAnchor.findOneAndUpdate(
+        { batchId: id, stage: normalizedNewStatus },
+        {
+          batchId: id,
+          stage: normalizedNewStatus,
+          stagedId,
+          bizStep: BIZ_STEP[normalizedNewStatus] ?? 'unknown',
+          dataHash,
+          payload: chainPayload,
+          actorUserId: actorId ?? '',
+          actorRole,
+          txHash,
+          anchoredAt: new Date(),
+        },
+        { upsert: true, setDefaultsOnInsert: true }
+      );
     } catch (chainErr) {
       // Bug 3: surface failure so ops can retry; do not swallow silently.
       const msg = chainErr instanceof Error ? chainErr.message : String(chainErr);
@@ -579,4 +614,98 @@ export async function verifyBatchIntegrity(
       message: `Chain read failed: ${message}`,
     };
   }
+}
+
+
+// ── Per-stage Timeline Verification ─────────────────────────────────────────
+//
+// Walks every anchored stage for a batch and verifies each one independently
+// against the chain. Enables pinpointing WHICH stage (and which actor) was
+// tampered, rather than only checking the latest anchor.
+
+export interface StageIntegrity {
+  stage: string;
+  stagedId: string;
+  bizStep: string;
+  status: 'verified' | 'tampered' | 'chain_unavailable' | 'unanchored';
+  storedHash: string | null;
+  onChainHash: string | null;
+  actorUserId: string;
+  actorRole: string;
+  txHash: string | null;
+  recordedAt: number | null;
+  message: string;
+}
+
+export async function verifyBatchTimeline(
+  batchId: string,
+  provider: import('ethers').BrowserProvider | import('ethers').JsonRpcProvider
+): Promise<StageIntegrity[]> {
+  await connectDB();
+
+  const anchors = await BatchAnchor.find({ batchId }).sort({ anchoredAt: 1 }).lean();
+  if (anchors.length === 0) return [];
+
+  const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_HONEYTRACE_CONTRACT ?? '';
+  if (!CONTRACT_ADDRESS) {
+    return anchors.map((a) => ({
+      stage: a.stage,
+      stagedId: a.stagedId,
+      bizStep: a.bizStep,
+      status: 'chain_unavailable' as const,
+      storedHash: a.dataHash ?? null,
+      onChainHash: null,
+      actorUserId: a.actorUserId ?? '',
+      actorRole: a.actorRole ?? '',
+      txHash: a.txHash ?? null,
+      recordedAt: null,
+      message: 'Contract address not configured',
+    }));
+  }
+
+  const { Contract } = await import('ethers');
+  const ABI = [
+    'function getBatch(string batchId) public view returns (bytes32 dataHash, uint256 timestamp, address recorder, string bizStep)',
+  ];
+  const contract = new Contract(CONTRACT_ADDRESS, ABI, provider);
+
+  const out: StageIntegrity[] = [];
+  for (const a of anchors) {
+    try {
+      const r = await contract.getBatch(a.stagedId);
+      const onChainHash = String(r.dataHash);
+      const match = a.dataHash && onChainHash.toLowerCase() === String(a.dataHash).toLowerCase();
+      out.push({
+        stage: a.stage,
+        stagedId: a.stagedId,
+        bizStep: a.bizStep,
+        status: match ? 'verified' : 'tampered',
+        storedHash: a.dataHash ?? null,
+        onChainHash,
+        actorUserId: a.actorUserId ?? '',
+        actorRole: a.actorRole ?? '',
+        txHash: a.txHash ?? null,
+        recordedAt: Number(r.timestamp) * 1000,
+        message: match
+          ? `Stage ${a.stage} verified — hash matches on-chain record`
+          : `Stage ${a.stage} TAMPERED — DB hash diverges from on-chain (actor recorded: ${a.actorRole || 'unknown'})`,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      out.push({
+        stage: a.stage,
+        stagedId: a.stagedId,
+        bizStep: a.bizStep,
+        status: msg.includes('BATCH_NOT_FOUND') ? 'unanchored' : 'chain_unavailable',
+        storedHash: a.dataHash ?? null,
+        onChainHash: null,
+        actorUserId: a.actorUserId ?? '',
+        actorRole: a.actorRole ?? '',
+        txHash: a.txHash ?? null,
+        recordedAt: null,
+        message: `Stage ${a.stage}: ${msg}`,
+      });
+    }
+  }
+  return out;
 }
