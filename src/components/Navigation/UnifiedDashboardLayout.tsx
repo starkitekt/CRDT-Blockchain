@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { Content } from '@carbon/react';
 import { usePathname, useRouter } from 'next/navigation';
 import { authApi } from '@/lib/api';
 
@@ -75,7 +74,7 @@ export default function UnifiedDashboardLayout({ children, header, sidebar }: Un
             {sidebar}
           </aside>
         )}
-        <Content className="flex-1 !p-0 !bg-transparent">
+        <div className="flex-1 p-0 bg-transparent">
           <div className="dashboard-container">
             {header && (
               <header className="mb-spacing-xl">
@@ -86,7 +85,7 @@ export default function UnifiedDashboardLayout({ children, header, sidebar }: Un
               {children}
             </main>
           </div>
-        </Content>
+        </div>
       </div>
     </div>
   );

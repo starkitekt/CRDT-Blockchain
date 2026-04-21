@@ -9,7 +9,6 @@ import HoneyHeader from '@/components/Navigation/HoneyHeader';
 import GovFooter from '@/components/Navigation/GovFooter';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
-import { Content } from '@carbon/react';
 
 export const metadata: Metadata = {
   title: 'HoneyTRACE — Blockchain Traceability | Ministry of Tribal Affairs × IIT Delhi',
@@ -75,13 +74,13 @@ export default async function LocaleLayout({
         <NextIntlClientProvider messages={messages}>
           <ServiceWorkerRegistrar />
           <HoneyHeader />
-          <Content className="!pt-0 !px-0 !bg-transparent">
+          <div className="pt-0 px-0 bg-transparent">
             <ErrorBoundary>
               <main id="main-content">
                 {children}
               </main>
             </ErrorBoundary>
-          </Content>
+          </div>
           <GovFooter />
         </NextIntlClientProvider>
       </body>
