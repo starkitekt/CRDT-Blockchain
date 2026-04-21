@@ -17,7 +17,7 @@ import { useBatches } from '@/hooks/useBatches';
 import BlockchainCertificate from '@/components/Traceability/BlockchainCertificate';
 import IdentityVerificationModal from '@/components/Onboarding/IdentityVerificationModal';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
-import CopyableValue from '@/components/CopyableValue';
+import OnChainTxLink from '@/components/Blockchain/OnChainTxLink';
 import type { Batch } from '@/types';
 
 function fmtDate(d?: string | null) {
@@ -93,48 +93,59 @@ export default function EnterpriseDashboard() {
         <InlineNotification kind="error" lowContrast title="Failed to load batches" subtitle={error} />
       )}
 
-      {/* KPI Tiles */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-spacing-lg">
-        <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
-          <div className="absolute right-[-20px] top-[-20px] opacity-10 group-hover:scale-110 transition-transform duration-700 text-primary">
-            <Package size={100} />
+      {/* KPI Tiles — unified .kpi-card tokens (white surface, generous
+          padding, 36px icon swatch, no oversized watermark icon). */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-spacing-md">
+        <div className="kpi-card kpi-card--accent-honey">
+          <div className="kpi-card-body">
+            <div className="flex items-start justify-between gap-3">
+              <p className="kpi-card-label">Batches received</p>
+              <span className="kpi-card-icon tint-honey"><Package size={18} /></span>
+            </div>
+            <p className="kpi-card-value">{loading ? '—' : batches.length}</p>
+            <p className="kpi-card-meta flex items-center gap-2">
+              <span className="inline-block w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+              <span className="text-eyebrow !text-emerald-700">Active tracking</span>
+            </p>
           </div>
-          <p className="text-caption mb-spacing-md tracking-widest uppercase !text-slate-400">Batches Received</p>
-          <h2 className="text-h1 text-gradient">{loading ? '—' : batches.length}</h2>
-          <div className="mt-4 flex items-center gap-2">
-            <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-            <span className="text-[10px] font-bold text-primary uppercase">Active Tracking</span>
-          </div>
-        </Tile>
+        </div>
 
-        <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
-          <div className="absolute right-[-20px] top-[-20px] opacity-10 group-hover:rotate-12 transition-transform duration-700 text-primary">
-            <CheckmarkFilled size={100} />
+        <div className="kpi-card kpi-card--accent-ok">
+          <div className="kpi-card-body">
+            <div className="flex items-start justify-between gap-3">
+              <p className="kpi-card-label">Certified</p>
+              <span className="kpi-card-icon tint-green"><CheckmarkFilled size={18} /></span>
+            </div>
+            <p className="kpi-card-value">{loading ? '—' : certifiedCnt}</p>
+            <p className="kpi-card-meta text-eyebrow !text-emerald-700">Quality verified</p>
           </div>
-          <p className="text-caption mb-spacing-md tracking-widest uppercase !text-slate-400">Certified</p>
-          <h2 className="text-h1 text-gradient">{loading ? '—' : certifiedCnt}</h2>
-          <div className="mt-4 text-[10px] font-bold text-success uppercase">Quality Verified</div>
-        </Tile>
+        </div>
 
-        <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium relative overflow-hidden group">
-          <div className="absolute right-[-20px] top-[-20px] opacity-10 group-hover:scale-110 transition-transform duration-700 text-primary">
-            <Delivery size={100} />
+        <div className="kpi-card">
+          <div className="kpi-card-body">
+            <div className="flex items-start justify-between gap-3">
+              <p className="kpi-card-label">Total weight</p>
+              <span className="kpi-card-icon tint-blue"><Delivery size={18} /></span>
+            </div>
+            <p className="kpi-card-value">{loading ? '—' : `${totalKg.toFixed(1)} kg`}</p>
+            <p className="kpi-card-meta text-eyebrow !text-slate-500">{onChainCnt} on-chain anchored</p>
           </div>
-          <p className="text-caption mb-spacing-md tracking-widest uppercase !text-slate-400">Total Weight</p>
-          <h2 className="text-h1 text-gradient">{loading ? '—' : `${totalKg.toFixed(1)} kg`}</h2>
-          <div className="mt-4 text-[10px] font-bold text-slate-400 uppercase">{onChainCnt} On-Chain Anchored</div>
-        </Tile>
+        </div>
 
-        <Tile className="glass-panel p-spacing-lg rounded-2xl shadow-xl elevation-premium border-b-4 border-error relative overflow-hidden group">
-          <div className="absolute right-[-20px] top-[-20px] opacity-10 group-hover:rotate-[-12deg] transition-transform duration-700 text-error">
-            <WarningAlt size={100} />
+        <div className={`kpi-card ${recalledCnt > 0 ? 'kpi-card--accent-error' : ''}`}>
+          <div className="kpi-card-body">
+            <div className="flex items-start justify-between gap-3">
+              <p className="kpi-card-label">Recalled</p>
+              <span className="kpi-card-icon tint-error"><WarningAlt size={18} /></span>
+            </div>
+            <p className={`kpi-card-value ${recalledCnt > 0 ? '!text-error' : ''}`}>
+              {loading ? '—' : recalledCnt}
+            </p>
+            <p className="kpi-card-meta text-eyebrow !text-slate-500">
+              {recalledCnt > 0 ? 'Action required' : 'No active recalls'}
+            </p>
           </div>
-          <p className="text-caption mb-spacing-md tracking-widest uppercase !text-error/70">Recalled</p>
-          <h2 className="text-h1 !text-error">{loading ? '—' : recalledCnt}</h2>
-          <div className="mt-4 flex items-center gap-1">
-            {recalledCnt > 0 && [1,2].map(i => <div key={i} className="w-1.5 h-1.5 bg-error rounded-full" />)}
-          </div>
-        </Tile>
+        </div>
       </div>
 
       {/* Table */}
@@ -181,12 +192,13 @@ export default function EnterpriseDashboard() {
                       <TableCell className="!p-4 !border-none"><QualityTag batch={batch} /></TableCell>
                       <TableCell className="!p-4 !border-none">
                         {batch.onChainTxHash ? (
-                          <div className="flex items-center gap-1">
-                            <span className="font-mono text-[11px] text-teal-700 break-all max-w-[200px]">{batch.onChainTxHash}</span>
-                            <CopyableValue value={batch.onChainTxHash} label="Copy" className="min-h-0 h-6 px-1" />
-                          </div>
+                          <OnChainTxLink
+                            txHash={batch.onChainTxHash}
+                            label="Anchor"
+                            compact
+                          />
                         ) : (
-                          <Tag type="outline" className="!rounded-md text-[10px] border-none">Off-chain</Tag>
+                          <Tag type="outline" className="!rounded-md text-eyebrow border-none">Off-chain</Tag>
                         )}
                       </TableCell>
                       <TableCell className="!p-4 !border-none text-slate-500 font-medium">{fmtDate(batch.dispatchedAt)}</TableCell>
@@ -226,9 +238,12 @@ export default function EnterpriseDashboard() {
             </div>
             {detailBatch.onChainTxHash && (
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">On-Chain Transaction Hash</p>
-                <p className="font-mono text-xs break-all text-teal-700">{detailBatch.onChainTxHash}</p>
-                <CopyableValue value={detailBatch.onChainTxHash} label="Copy Full Hash" className="mt-2 min-h-0 h-7 px-2" />
+                <p className="text-eyebrow text-slate-400 mb-2">On-chain anchor</p>
+                <OnChainTxLink
+                  txHash={detailBatch.onChainTxHash}
+                  label="Tx hash"
+                  prefetchDetails
+                />
               </div>
             )}
           </div>

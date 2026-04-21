@@ -36,6 +36,8 @@ export interface IUser extends Document {
   // ── Warehouse ─────────────────────────────────────────────────────────────
   gstNumber?: string;
   wdraLicenseNo?: string;
+  /** Warehouse storage tariff used by the marketplace, in paise per kg per day. */
+  storageRatePerKgPerDayPaise?: number;
 
   // ── Lab ───────────────────────────────────────────────────────────────────
   nablAccreditationNo?: string;
@@ -90,6 +92,7 @@ const UserSchema = new Schema<IUser>(
     // ── Warehouse ─────────────────────────────────────────────────────────────
     gstNumber: { type: String, trim: true, uppercase: true },
     wdraLicenseNo: { type: String, trim: true },
+    storageRatePerKgPerDayPaise: { type: Number, min: 0 },
 
     // ── Lab ───────────────────────────────────────────────────────────────────
     nablAccreditationNo: { type: String, trim: true },

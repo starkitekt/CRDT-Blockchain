@@ -32,6 +32,7 @@ import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayo
 import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
 import RecallManagementModal from '@/components/Traceability/RecallManagementModal';
 import CopyableValue from '@/components/CopyableValue';
+import OnChainTxLink from '@/components/Blockchain/OnChainTxLink';
 
 export default function OfficerDashboard() {
   const currentUser = useCurrentUser();
@@ -186,12 +187,12 @@ export default function OfficerDashboard() {
           <p className="wd-kpi-value">{fieldAuditCount}</p>
           <p className="wd-kpi-meta wd-kpi-delta--warn">{tDashboard('site_visit_needed')}</p>
         </div>
-        <div className="wd-kpi-card" style={{ borderTop: '3px solid #dc2626' }}>
+        <div className="wd-kpi-card kpi-card--accent-error">
           <div className="wd-kpi-top">
-            <span className="wd-kpi-label" style={{ color: '#dc2626' }}>{tDashboard('flagged_batches')}</span>
-            <div className="wd-kpi-icon" style={{ background: '#fee2e2', color: '#dc2626' }}><CloseFilled size={18} /></div>
+            <span className="wd-kpi-label" style={{ color: 'var(--error)' }}>{tDashboard('flagged_batches')}</span>
+            <div className="wd-kpi-icon tint-error"><CloseFilled size={18} /></div>
           </div>
-          <p className="wd-kpi-value" style={{ color: '#dc2626' }}>{flaggedCount}</p>
+          <p className="wd-kpi-value" style={{ color: 'var(--error)' }}>{flaggedCount}</p>
           <p className="wd-kpi-meta wd-kpi-delta--error">Requires action</p>
         </div>
       </div>
@@ -384,11 +385,17 @@ export default function OfficerDashboard() {
                   timestamp: signTimestamp,
                 }, null, 2)}
               </div>
-              <CopyableValue
-                value={comparisonBatch?.onChainTxHash || comparisonBatch?.onChainDataHash || '--'}
-                label="Copy Hash"
-                className="text-primary mt-3 min-h-0 h-7 px-2"
-              />
+              {comparisonBatch?.onChainTxHash ? (
+                <div className="mt-3">
+                  <OnChainTxLink txHash={comparisonBatch.onChainTxHash} label="Anchor" />
+                </div>
+              ) : (
+                <CopyableValue
+                  value={comparisonBatch?.onChainDataHash || '--'}
+                  label="Copy Hash"
+                  className="text-primary mt-3 min-h-0 h-7 px-2"
+                />
+              )}
             </div>
             <Stack gap={4}>
               <Button size="lg" kind="primary" renderIcon={CheckmarkFilled} className="w-full !max-w-none h-14 !rounded-xl shadow-2xl" onClick={() => { if (comparisonBatch) { setActionBatch(comparisonBatch.batchId); setConfirmAction('approve'); } }}>

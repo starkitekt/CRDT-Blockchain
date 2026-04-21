@@ -182,7 +182,10 @@ npm run dev
 | `npm run build` | Production build |
 | `npm run start` | Run production server |
 | `npm run lint` | ESLint |
-| `npm run seed` | Reset/seed local database |
+| `npm run seed` | Reset/seed local database (minimal fixtures) |
+| `npm run seed:rich` | Wipe + seed full lifecycle dataset (multi-role users, batches across every status, lab results, recalls, marketplace listings, bid histories, notifications) |
+| `npm run sepolia:anchor` | Re-anchor seeded lifecycle events on Base Sepolia against the existing contract (idempotent — skips identical hashes) |
+| `npm run sepolia:reseed` | Convenience: `seed:rich` followed by `sepolia:anchor` |
 | **Chain** | |
 | `npm run chain:compile` | Compile Solidity contracts |
 | `npm run chain:test` | Run Hardhat tests |
@@ -210,6 +213,19 @@ npm run dev
 
 ## Testing
 
+### Test matrix (current state)
+
+| Suite | Command | Coverage |
+|-------|---------|----------|
+| Hardhat (Solidity) | `npm run chain:test` | 9 tests across `HoneyTraceRegistry`: batch records (RBAC, replay), lab linkage, recall init, marketplace settlement happy path + replay protection + idempotency + auth-gating |
+| Vitest (TS units) | `npm run test:unit` | 25 tests across 3 files: `marketplace`, `blockchain-utils`, `explorer` (URL builder + `shortHash` edges) |
+| Playwright `app-flow.spec.ts` | `npm run test:e2e -- app-flow.spec.ts` | Full 6-role workflow against `next dev` |
+| Playwright `app-flow.hosted.spec.ts` | `PLAYWRIGHT_BASE_URL=… npm run test:e2e -- app-flow.hosted.spec.ts` | Same workflow against a hosted deployment |
+| Playwright `marketplace.spec.ts` | `npm run test:e2e -- marketplace.spec.ts` | Listing creation → bid → settlement render |
+| Playwright `frontend-smoke.spec.ts` | `npm run test:e2e -- frontend-smoke.spec.ts` | Dashboard render under cold dev compile |
+
+`npm run test:all` runs the chain → unit → e2e pipeline.
+
 ### Unit + Build Safety
 
 ```bash
@@ -230,6 +246,31 @@ npx playwright install chromium
 ```bash
 npm run test:e2e
 ```
+
+#### Reliability notes (Playwright × Carbon × Next dev)
+
+The dev server compiles routes on demand, and Carbon's `TextInput` /
+`Select` components have specific event-handling quirks. The suites
+encode the following hard-won patterns — keep them when adding new
+flows:
+
+- `playwright.config.ts` uses generous timeouts (`timeout: 600_000`,
+  `expect.timeout: 30_000`, `actionTimeout: 60_000`,
+  `navigationTimeout: 120_000`).
+- Use `page.locator('.cds--modal.is-visible')` instead of
+  `page.getByRole('dialog')` — Carbon keeps inert hidden dialogs in the
+  DOM that match `dialog`.
+- For controlled inputs that gate a submit button (consumer search,
+  warehouse intake form), wrap the fill in a small retry loop that
+  alternates between `locator.fill()` and `keyboard.insertText()` and
+  checks both `inputValue()` and `button.isEnabled()` before
+  proceeding.
+- For session-dependent flows (lab publish), poll `/api/auth` from
+  `page.evaluate` until `currentUser.userId` is populated, then
+  `page.reload()` to force the `useCurrentUser` hook to rehydrate
+  before clicking submit.
+- Geolocation is granted unconditionally so the farmer GPS step never
+  hangs.
 
 ## Seeded Accounts
 
@@ -259,9 +300,228 @@ The supply chain flow validates role transitions across:
 
 On-chain anchoring happens automatically at key status transitions (`in_warehouse`, `certified`, `dispatched`, `recalled`) and when lab results are published.
 
+### On-Chain Anchoring: Staged Batch IDs
+
+`HoneyTraceRegistry.recordBatch` enforces immutability per `batchId`:
+
+```solidity
+require(existing.dataHash == dataHash, "BATCH_HASH_MISMATCH");
+```
+
+Because every supply-chain milestone produces a *different* payload (the
+batch object grows: warehouse intake adds receipt metadata, lab adds
+results, dispatch adds carrier info, etc.), re-anchoring under the same
+`batchId` would always revert.
+
+The backend therefore writes each milestone under a deterministic
+**staged id** of the form:
+
+```
+<batchId>#<status>     e.g. HT-20260417-0007#stored
+                            HT-20260417-0007#certified
+                            HT-20260417-0007#dispatched
+```
+
+Properties:
+
+- Each milestone is its own immutable on-chain receipt
+- All receipts are deterministically attributable to the parent batch
+  via the `id` prefix
+- Marketplace settlements use the listing's already-unique
+  `MK-YYYYMMDD-NNN` id and so don't need a suffix
+- The DB still stores only the latest `onChainTxHash` /
+  `onChainDataHash`; full per-stage history lives on chain
+
+Implementation: see `BIZ_STEP` and `anchorBatchOnChain` calls in
+`src/lib/services/batch.service.ts`.
+
+### Verifying On-Chain Anchoring
+
+A standalone script sends three real Base Sepolia transactions
+(harvest, staged storage, marketplace settlement) and prints explorer
+links — useful for sanity-checking a freshly-funded relayer:
+
+```bash
+node scripts/verify-sepolia-anchor.cjs
+```
+
+Requires `BLOCKCHAIN_RELAYER_PRIVATE_KEY`,
+`HONEYTRACE_CONTRACT_ADDRESS`, and `BASE_SEPOLIA_RPC_URL` in
+`.env.local`. Total cost on L2 is ≈ 0.000001 ETH.
+
 ## UX Notes
 
-Transaction hash/ID copy controls are available in dashboard and traceability surfaces where hash-like values are shown (lab, officer, enterprise, onboarding receipt, certificate modal).
+### On-chain transaction display (`OnChainTxLink`)
+
+Every surface that previously rendered a raw transaction hash with only a
+copy button now uses the unified `<OnChainTxLink />` component
+(`src/components/Blockchain/OnChainTxLink.tsx`). It always renders:
+
+- a truncated, monospace hash (`shortHash` from `src/lib/explorer.ts`),
+- a copy-to-clipboard button,
+- a "View on BaseScan" link that opens `https://sepolia.basescan.org/tx/<hash>`
+  in a new tab (chain-aware via `explorerTxUrl`), and
+- an expandable on-chain detail panel that fetches block number, status,
+  gas usage, confirmations and timestamp from
+  `GET /api/onchain/tx/[hash]` (a new dynamic route backed by ethers v6
+  against `BASE_SEPOLIA_RPC_URL`).
+
+It accepts two layout flags: `compact` (single-line hash + icon button,
+used in dense tables) and `prefetchDetails` (auto-expand and prefetch on
+mount, used in modals/certificates where the user is clearly inspecting
+a single batch).
+
+Surfaces migrated from the old `CopyableValue` to `OnChainTxLink`:
+
+- `farmer/page.tsx`, `warehouse/page.tsx`, `admin/page.tsx`,
+  `lab/page.tsx`, `officer/page.tsx` — compact mode in tables
+- `enterprise/page.tsx`, `consumer/page.tsx`,
+  `BlockchainCertificate.tsx`, `marketplace/[listingId]/page.tsx` —
+  full mode, `prefetchDetails` on the detail surfaces
+
+Helpers live in `src/lib/explorer.ts` (`DEFAULT_CHAIN_ID`,
+`explorerTxUrl`, `explorerAddressUrl`, `networkLabel`, `shortHash`) and
+have direct unit coverage in `test/unit/explorer.test.ts`.
+
+### Typography system v3 — Plus Jakarta Sans + DM Mono
+
+The typography system was rebuilt around two self-hosted Google fonts
+loaded via `next/font`:
+
+| Role | Family | Where it shows |
+|------|--------|----------------|
+| Primary brand / UI | **Plus Jakarta Sans** (Regular / Medium / SemiBold / Bold) | All headings, body copy, buttons, navigation |
+| Numerical / ledger data | **DM Mono** (Regular / Medium) | Hashes, addresses, prices, weights, GPS, transaction IDs, countdowns |
+
+Global rules enforced in `src/app/globals.css`:
+
+- Minimum rendered size: **12 pt** (system floor — accessibility for
+  field use)
+- Headings: **−6 % letter-spacing** (`--tracking-heading: -0.06em`)
+- Body and UI: **0 %** kerning (`--tracking-body: 0em`)
+- All numerics use `font-variant-numeric: tabular-nums`
+
+Scale (utility classes):
+
+| Class | Family | Size / line-height | Use |
+|-------|--------|--------------------|-----|
+| `.text-h1` | Plus Jakarta Bold | 48pt / 1.1 | Hero titles |
+| `.text-h2` | Plus Jakarta SemiBold | 32pt / 1.2 | Section headers, dashboard modules |
+| `.text-h3` | Plus Jakarta Medium | 24pt / 1.3 | Card titles, form groupings |
+| `.text-body-lg` | Plus Jakarta Regular | 18pt / 1.5 | Intro paragraphs |
+| `.text-body` | Plus Jakarta Regular | 14pt / 1.6 | Default UI text |
+| `.text-small` | Plus Jakarta Medium | 12pt / 1.4 | Captions, breadcrumbs |
+| `.mono-data` | DM Mono Medium | 20pt | Large transaction totals, supply chain IDs |
+| `.num`, `.ledger-num` | DM Mono Regular | inherit | Inline tonnage, GPS, wallet addresses, prices |
+
+Typography tokens are exposed as CSS variables on `:root`:
+`--font-primary`, `--font-numeric`, `--tracking-heading`,
+`--tracking-body`. Marketplace component CSS
+(`src/components/Marketplace/marketplace.module.css`) consumes
+`var(--font-mono)` for `.price-display` and `.countdown`, and
+`var(--font-primary)` for `.closed-date`.
+
+`src/app/[locale]/layout.tsx` is the single place to swap font weights
+or add a new family — both `Plus_Jakarta_Sans` and `DM_Mono` are
+imported from `next/font/google`, exposed as CSS variables on `<html>`,
+and self-hosted with no runtime fetch.
+
+### Rich seed + Sepolia re-anchor pipeline
+
+To exercise every product surface end-to-end (UI, API, contract) without
+clicking through every wizard, two scripts ship out of the box:
+
+1. **`scripts/seed-rich.ts`** (`npm run seed:rich`) — wipes the target
+   MongoDB database and writes a coherent fixture set:
+   - one user per role (farmer, warehouse, lab, officer, enterprise,
+     consumer, secretary, admin) with deterministic credentials,
+   - batches in every status (`pending`, `in_warehouse`, `in_testing`,
+     `certified`, `dispatched`, `recalled`),
+   - lab results (passing + failing), recalls, marketplace listings
+     (live / settled / unsold), bid histories, notifications.
+2. **`scripts/anchor-sepolia.ts`** (`npm run sepolia:anchor`) — walks
+   the seeded data and anchors every lifecycle event on the existing
+   Base Sepolia deployment (`0x2D85…D8b6`) using staged batch ids
+   (`<batchId>#<status>`). Each on-chain write is **idempotent**: if the
+   contract already holds an identical hash for that staged id, the
+   script logs `skip` and moves on, so re-running costs no gas.
+
+Use `npm run sepolia:reseed` to do both in sequence — useful before a
+demo or before running the hosted Playwright suite against a fresh
+dataset.
+
+## Unified Design System v2
+
+All role dashboards (farmer, warehouse, lab, officer, enterprise,
+consumer, secretary, admin) and the marketplace render against a single
+set of design tokens and component utilities defined in
+`src/app/globals.css`. The Enterprise dashboard was the visual
+reference; every other dashboard was migrated to inherit from the
+shared utilities (legacy namespaced classes such as `wd-header`,
+`ld-header`, `od-header`, `sd-header`, `wd-kpi-card`, `fd-kpi-card`,
+`wd-modal-desc`, `fd-modal-desc` are now thin aliases).
+
+Key utilities:
+
+| Class | Purpose |
+|-------|---------|
+| `.page-header` (+ `.page-header-icon`, `.page-header-eyebrow`, `.page-header-actions`) | Canonical dashboard header: icon tile, eyebrow, `text-h3` title, subtitle, right-aligned actions, responsive wrap |
+| `.kpi-card` (+ `.kpi-card--accent-error/warn/info/success`) | KPI tile: 14px radius, 1px border, neutral shadow, hover lift, optional 3px top accent |
+| `.tint-blue/amber/green/red/purple/error/warn/info/success` | Semantic icon-tile background tints |
+| `.cds-modal-desc` | Standard modal body description text (alias: `wd-modal-desc`, `fd-modal-desc`) |
+| `.vloc*` (`.vloc`, `.vloc--centered`, `.vloc-status[data-state]`, `.vloc-coords`, `.vloc-btn`, `.vloc-btn--primary/--ghost/--block`, `.vloc-help`, `.vloc-help--error`, `.vloc-status-dot`) | "Verify location" card used by the farmer onboarding GPS step. Add `.vloc--centered` inside single-column wizards for the hero-centered variant (icon stacks above the title, status + coords + actions align centrally). |
+| `.onboard-step-intro`, `.onboard-step-lede`, `.onboard-upload-zone`, `.onboard-success-icon` | Onboarding wizard typography + zones |
+| `.text-gradient`, `.text-gradient-cool` | Honey-amber and cool brand title gradients |
+| `.glass-panel`, `.glass-panel-translucent` | Solid surface vs translucent blurred surface (used by marketplace) |
+
+Tokens (defined as CSS variables on `:root`):
+
+- Radii: `--radius-sm/md/lg/xl/pill`
+- Brand accents: `--accent-honey-50/300/500/700`, `--accent-blockchain`
+- Spacing: `--spacing-1` … `--spacing-12`
+- Typography: `text-h1/h2/h3/h4/body/caption/label`
+
+Accessibility:
+
+- All `.vloc-btn` controls meet WCAG 2.5.5 minimum 44×44 hit target
+- `@media (prefers-reduced-motion: reduce)` disables KPI hover lifts,
+  loading shimmers, and onboarding transitions
+- GPS verification uses `role="region"` + `aria-live="polite"` so
+  screen readers announce state changes; the in-card `.vloc-help`
+  carries the error message instead of a duplicate `InlineNotification`
+
+When adding a new dashboard or page, prefer the utilities above before
+introducing namespaced CSS — namespaced classes should only exist as
+aliases that point at the unified utilities.
+
+### Marketplace UI
+
+The marketplace (`/[locale]/dashboard/marketplace`) renders against the
+same unified system:
+
+- **Header** — `.page-header` + `.page-header-icon`/`-eyebrow`/`-title`/
+  `-subtitle`/`-actions`, exactly matching every role dashboard.
+- **KPI strip** — `.kpi-card` / `.kpi-card-body` / `-label` / `-value` /
+  `-meta`, with `.kpi-card--accent-honey` on "Live auctions" to flag the
+  primary CTA.
+- **Listing card** (`.listing-card` in `marketplace.module.css`):
+  - solid white surface, `border-radius: 14px`, `1.125rem 1.25rem 1rem`
+    padding, subtle hover lift (`translateY(-1px)` + border darken);
+  - 3px top gradient bar (amber for live, emerald for settled, slate for
+    unsold / cancelled);
+  - `.price-display` — monospace 1.375rem → 1.5rem at ≥1280px, tabular
+    numerals, wraps gracefully on very large values;
+  - `.countdown` — 1.25rem monospace for live timers only, reserves the
+    red-pulse `.ending` state exclusively for the final 60 seconds;
+  - `.closed-date` — 0.9375rem body weight for settled / unsold /
+    cancelled dates, so the date never competes visually with the price
+    column.
+- **Listing card status never shows the `.ending` (red pulse) animation
+  on non-live listings** — the previous behaviour was a visual bug that
+  made settled auctions appear alarming.
+- Grid gaps use `gap-spacing-md` (24px) across KPI strip and listings
+  grid so the marketplace matches the density of the other dashboards
+  exactly.
 
 ## Smart Contract
 

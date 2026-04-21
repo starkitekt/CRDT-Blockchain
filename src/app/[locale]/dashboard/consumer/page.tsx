@@ -18,7 +18,7 @@ import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
 import BlockchainCertificate from '@/components/Traceability/BlockchainCertificate';
 import CTETimeline, { CTEEvent } from '@/components/Traceability/CTETimeline';
 import { batchesApi, labApi, ApiError } from '@/lib/api';
-import CopyableValue from '@/components/CopyableValue';
+import OnChainTxLink from '@/components/Blockchain/OnChainTxLink';
 import type { Batch, LabResult } from '@/types';
 
 type TFn = (...args: unknown[]) => string;
@@ -140,14 +140,15 @@ export default function ConsumerPortal() {
     : [];
 
   const pageHeader = (
-    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 py-6">
-      <div className="flex items-center gap-4">
-        <div className="w-12 h-12 rounded-xl bg-white border border-gray-200 shadow-sm flex items-center justify-center text-blue-600 shrink-0">
-          <Security size={24} />
+    <div className="page-header">
+      <div className="page-header-lead">
+        <div className="page-header-icon">
+          <Security size={26} />
         </div>
-        <div>
-          <h1 className="text-h1" style={{ fontSize: '1.75rem' }}>HoneyTrace Consumer Portal</h1>
-          <p className="text-body mt-1">{tDashboard('portal_subtitle')}</p>
+        <div className="page-header-text">
+          <span className="page-header-eyebrow">Consumer Portal</span>
+          <h1 className="page-header-title">HoneyTrace Consumer Portal</h1>
+          <p className="page-header-subtitle">{tDashboard('portal_subtitle')}</p>
         </div>
       </div>
     </div>
@@ -181,9 +182,11 @@ export default function ConsumerPortal() {
             </div>
 
             {/* Tip: scanning the jar QR opens the page directly */}
-            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-sm text-amber-900">
-              <span className="text-lg leading-none mt-0.5">📱</span>
-              <span>
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-[14px] px-3 py-2.5 text-sm text-amber-900">
+              <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-amber-100 text-amber-700 shrink-0">
+                <QrCode size={16} />
+              </span>
+              <span className="leading-relaxed">
                 <strong>Tip:</strong> Scan the QR code on the product jar with your
                 phone camera — you will be taken directly to the journey page.
                 Or enter the batch ID below to search manually.
@@ -311,9 +314,12 @@ export default function ConsumerPortal() {
               </div>
               {batchData.onChainTxHash && (
                 <div className="mt-spacing-md p-spacing-md bg-teal-50 border border-teal-100 rounded-xl">
-                  <p className="text-[10px] font-bold text-teal-700 uppercase tracking-widest mb-2">On-Chain Transaction Hash</p>
-                  <p className="font-mono text-xs break-all text-teal-800">{batchData.onChainTxHash}</p>
-                  <CopyableValue value={batchData.onChainTxHash} label="Copy Full Hash" className="mt-2 min-h-0 h-7 px-2 text-teal-700" />
+                  <p className="text-eyebrow text-teal-700 mb-2">On-chain proof of authenticity</p>
+                  <OnChainTxLink
+                    txHash={batchData.onChainTxHash}
+                    label="Anchor tx"
+                    prefetchDetails
+                  />
                 </div>
               )}
             </Tile>

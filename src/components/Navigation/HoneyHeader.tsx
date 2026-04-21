@@ -7,6 +7,8 @@ import {
   HeaderGlobalBar,
   HeaderGlobalAction,
   HeaderMenuButton,
+  HeaderNavigation,
+  HeaderMenuItem,
   SideNav,
   SideNavItems,
   SideNavLink,
@@ -16,6 +18,7 @@ import {
   Notification,
   NotificationNew,
   Logout,
+  ShoppingCart,
 } from "@carbon/icons-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -182,6 +185,21 @@ const HoneyHeader = () => {
                 {ti("title")}
               </HeaderName>
 
+              <HeaderNavigation aria-label="Primary">
+                <HeaderMenuItem
+                  href={`/${pathname.split("/")[1] || "en"}/dashboard/${currentRole.id}`}
+                  isActive={pathname.includes(`/dashboard/${currentRole.id}`)}
+                >
+                  Dashboard
+                </HeaderMenuItem>
+                <HeaderMenuItem
+                  href={`/${pathname.split("/")[1] || "en"}/dashboard/marketplace`}
+                  isActive={pathname.includes("/dashboard/marketplace")}
+                >
+                  Marketplace
+                </HeaderMenuItem>
+              </HeaderNavigation>
+
               <HeaderGlobalBar>
                 <HeaderGlobalAction
                   aria-label={tCommon("notifications")}
@@ -227,6 +245,12 @@ const HoneyHeader = () => {
                     href={`/${pathname.split("/")[1]}/dashboard/${currentRole.id}`}
                   >
                     Dashboard
+                  </SideNavLink>
+                  <SideNavLink
+                    href={`/${pathname.split("/")[1]}/dashboard/marketplace`}
+                    renderIcon={ShoppingCart}
+                  >
+                    Marketplace
                   </SideNavLink>
                 </SideNavItems>
               </SideNav>

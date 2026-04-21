@@ -244,3 +244,95 @@ export const notificationsApi = {
 export const warehousesApi = {
   list: () => apiGet<WarehouseOption[]>('/api/warehouses'),
 };
+
+// ── Marketplace ───────────────────────────────────────────────────────────────
+
+export type MarketplaceListingStatus = 'live' | 'settled' | 'cancelled' | 'unsold';
+
+export interface MarketplaceListing {
+  id: string;
+  listingId: string;
+  batchId: string;
+  farmerId: string;
+  farmerName: string;
+  warehouseId: string;
+  warehouseName: string;
+  weightKg: number;
+  floraType: string;
+  grade: 'A' | 'B';
+  reservePricePaise: number;
+  currentPricePaise: number;
+  bidIncrementPaise: number;
+  storageRatePerKgPerDayPaise: number;
+  storageStartAt: string;
+  storageCostPaise: number;
+  storageCostPaiseLive: number;
+  projectedNetToFarmerPaise: number;
+  minNextBidPaise: number;
+  bidCount: number;
+  highestBidderId?: string;
+  highestBidderName?: string;
+  highestBidderRole?: string;
+  startsAt: string;
+  endsAt: string;
+  timeRemainingMs: number;
+  antiSnipeWindowSec: number;
+  antiSnipeExtendSec: number;
+  status: MarketplaceListingStatus;
+  settledAt?: string;
+  settlementTxHash?: string;
+  settlementDataHash?: string;
+  netToFarmerPaise?: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MarketplaceBid {
+  id: string;
+  listingId: string;
+  bidderId: string;
+  bidderName: string;
+  bidderRole: 'enterprise' | 'consumer' | 'admin';
+  amountPaise: number;
+  isWinning: boolean;
+  isOutbid: boolean;
+  createdAt: string;
+}
+
+export interface CreateListingPayload {
+  batchId: string;
+  reservePricePaise: number;
+  bidIncrementPaise: number;
+  durationMinutes: number;
+  notes?: string;
+}
+
+export const marketplaceApi = {
+  list: (params?: { status?: MarketplaceListingStatus; scope?: 'mine' | 'all' }) => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set('status', params.status);
+    if (params?.scope) qs.set('scope', params.scope);
+    const query = qs.toString();
+    return apiGet<MarketplaceListing[]>(`/api/marketplace/listings${query ? `?${query}` : ''}`);
+  },
+  get: (listingId: string) =>
+    apiGet<MarketplaceListing>(`/api/marketplace/listings/${listingId}`),
+  create: (payload: CreateListingPayload) =>
+    apiPost<{ data: MarketplaceListing }>('/api/marketplace/listings', payload),
+  cancel: (listingId: string) =>
+    apiDelete<{ data: MarketplaceListing }>(`/api/marketplace/listings/${listingId}`),
+  bids: (listingId: string) =>
+    apiGet<MarketplaceBid[]>(`/api/marketplace/listings/${listingId}/bids`),
+  bid: (listingId: string, amountPaise: number) =>
+    apiPost<{ data: { bid: MarketplaceBid; listing: MarketplaceListing } }>(
+      `/api/marketplace/listings/${listingId}/bids`,
+      { amountPaise }
+    ),
+  settle: (listingId: string, opts?: { force?: boolean }) =>
+    apiPost<{ data: MarketplaceListing }>(
+      `/api/marketplace/listings/${listingId}/settle${opts?.force ? '?force=1' : ''}`,
+      {}
+    ),
+  sweep: () => apiPost<{ swept: number; results: Array<{ listingId: string; status: string }> }>('/api/marketplace/sweep', {}),
+};

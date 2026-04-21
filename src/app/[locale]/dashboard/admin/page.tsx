@@ -43,7 +43,7 @@ import GuidedTour from '@/components/Onboarding/GuidedTour';
 import IdentityVerificationModal from '@/components/Onboarding/IdentityVerificationModal';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
 import RecallManagementModal from '@/components/Traceability/RecallManagementModal';
-import CopyableValue from '@/components/CopyableValue';
+import OnChainTxLink from '@/components/Blockchain/OnChainTxLink';
 import { useRecalls } from '@/hooks/useRecalls';
 import { useBatches } from '@/hooks/useBatches';
 import type { RecallEvent } from '@/types';
@@ -386,11 +386,12 @@ export default function AdminDashboard() {
 
   const headerActions = (
     <div className="flex flex-col sm:flex-row gap-spacing-sm w-full md:w-auto mt-spacing-md md:mt-0">
-      <Button renderIcon={Audit} kind="secondary" onClick={() => setIsTourOpen(true)} className="w-full sm:w-auto flex justify-center">{t('audit_tour')}</Button>
-      <Button renderIcon={WarningAltFilled} kind="danger--ghost" onClick={() => setIsRecallOpen(true)} className="w-full sm:w-auto flex justify-center">Initiate Recall</Button>
+      <Button size="md" renderIcon={Audit} kind="tertiary" onClick={() => setIsTourOpen(true)} className="w-full sm:w-auto flex justify-center !rounded-lg">{t('audit_tour')}</Button>
+      <Button size="md" renderIcon={WarningAltFilled} kind="danger--tertiary" onClick={() => setIsRecallOpen(true)} className="w-full sm:w-auto flex justify-center !rounded-lg">Initiate Recall</Button>
       <Button
+        size="md"
         renderIcon={Download}
-        className="w-full sm:w-auto flex justify-center"
+        className="w-full sm:w-auto flex justify-center !rounded-lg"
         onClick={async () => {
           try {
             const res = await fetch('/api/admin/export?format=csv');
@@ -619,12 +620,13 @@ export default function AdminDashboard() {
                       </TableCell>
                       <TableCell className="!p-4 !border-none">
                         {recall.onChainTxHash ? (
-                          <div className="flex items-center gap-1">
-                            <span className="font-mono text-[11px] text-teal-700 break-all max-w-[180px]">{recall.onChainTxHash}</span>
-                            <CopyableValue value={recall.onChainTxHash} label="Copy" className="min-h-0 h-6 px-1" />
-                          </div>
+                          <OnChainTxLink
+                            txHash={recall.onChainTxHash}
+                            label="Recall"
+                            compact
+                          />
                         ) : (
-                          <span className="text-[10px] text-slate-400">Off-chain</span>
+                          <span className="text-eyebrow text-slate-400">Off-chain</span>
                         )}
                       </TableCell>
                     </TableRow>

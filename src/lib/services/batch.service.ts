@@ -374,8 +374,17 @@ export async function patchBatch(
         grade: batch.grade,
       }, normalizedNewStatus);
 
+      // The HoneyTraceRegistry contract enforces ONE immutable hash per
+      // batchId (require(existing.dataHash == dataHash)). Re-anchoring the
+      // same id with a new payload reverts as BATCH_HASH_MISMATCH. We
+      // anchor each milestone under a deterministic *staged* id
+      // (`HT-...#stored`, `HT-...#certified`, ...) so every transition
+      // gets its own immutable on-chain receipt while remaining
+      // attributable to the parent batch via the id prefix.
+      const stagedId = `${id}#${normalizedNewStatus}`;
+
       const txHash = await anchorBatchOnChain(
-        id,
+        stagedId,
         chainPayload,
         BIZ_STEP[normalizedNewStatus] ?? 'unknown',
         resolveLocation(updates, batch)   // â† fixes TS2339

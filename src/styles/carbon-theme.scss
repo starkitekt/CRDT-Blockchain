@@ -1,10 +1,107 @@
 @use '@carbon/react';
 
+/* ───────────────────────────────────────────────────────────────────────────
+   Bridge Carbon Design System to the HoneyTRACE typography system v3.
+
+   Carbon ships with IBM Plex Sans baked into a long list of CSS variables
+   (`--cds-body-01-font-family`, `--cds-heading-*`, the productive +
+   expressive scales, mono, etc.). Without this overlay every cds-* component
+   ignores Plus Jakarta Sans / DM Mono and renders in IBM Plex Sans.
+
+   We point every Carbon font-family token at our two `next/font` variables
+   so headings, body, buttons, tags, modals — every Carbon surface — adopt
+   Plus Jakarta Sans for text and DM Mono for digits.
+   ─────────────────────────────────────────────────────────────────────── */
 :root {
-  --cds-body-font-family: var(--font-plex-sans), 'Helvetica Neue', Arial, sans-serif;
+  /* Generic Carbon variables (used by older + newer cds versions). */
+  --cds-body-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', 'Helvetica Neue', Arial, sans-serif;
+  --cds-font-family-sans: var(--font-jakarta-sans), 'Plus Jakarta Sans', 'Helvetica Neue', Arial, sans-serif;
+  --cds-font-family-condensed: var(--font-jakarta-sans), 'Plus Jakarta Sans', 'Helvetica Neue', Arial, sans-serif;
+  --cds-font-family-mono: var(--font-dm-mono), 'DM Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  /* Carbon v11 typography scale tokens — point each one at Plus Jakarta Sans. */
+  --cds-body-01-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-body-02-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-body-compact-01-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-body-compact-02-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-label-01-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-label-02-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-helper-text-01-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-helper-text-02-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+
+  --cds-heading-01-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-heading-02-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-heading-03-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-heading-04-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-heading-05-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-heading-06-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-heading-07-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-heading-compact-01-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-heading-compact-02-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+
+  --cds-fluid-heading-03-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-fluid-heading-04-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-fluid-heading-05-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-fluid-heading-06-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-fluid-display-01-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-fluid-display-02-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-fluid-display-03-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-fluid-display-04-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+
+  --cds-display-01-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-display-02-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-display-03-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-display-04-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+
+  --cds-productive-heading-01-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-productive-heading-02-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-productive-heading-03-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-productive-heading-04-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-productive-heading-05-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-productive-heading-06-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-productive-heading-07-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+
+  --cds-expressive-heading-01-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-expressive-heading-02-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-expressive-heading-03-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-expressive-heading-04-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-expressive-heading-05-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+  --cds-expressive-heading-06-font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', sans-serif;
+
+  --cds-code-01-font-family: var(--font-dm-mono), 'DM Mono', ui-monospace, monospace;
+  --cds-code-02-font-family: var(--font-dm-mono), 'DM Mono', ui-monospace, monospace;
 }
 
 body {
-  background-color: #f4f4f4;
+  /* Page background tone is owned by globals.css (`--background`). Keep
+     Carbon's text colour to ensure proper inheritance into cds-* surfaces. */
   color: #161616;
+}
+
+/* Belt-and-braces: every Carbon surface inherits Plus Jakarta Sans even if
+   a future @carbon/react bump introduces a new font-family token we haven't
+   mapped above. The body-font cascade still wins for text content; this
+   wildcard only kicks in if a Carbon class hard-codes IBM Plex Sans. */
+.cds--btn,
+.cds--tag,
+.cds--label,
+.cds--text-input,
+.cds--number input,
+.cds--select-input,
+.cds--text-area,
+.cds--toggle,
+.cds--checkbox-label,
+.cds--radio-button-label,
+.cds--data-table,
+.cds--data-table thead,
+.cds--data-table tbody,
+.cds--modal-header__heading,
+.cds--modal-header__label,
+.cds--inline-notification__title,
+.cds--inline-notification__subtitle,
+.cds--toast-notification__title,
+.cds--toast-notification__subtitle,
+.cds--tooltip__label,
+.cds--tabs__nav-link {
+  font-family: var(--font-jakarta-sans), 'Plus Jakarta Sans', 'Helvetica Neue', Arial, sans-serif;
 }

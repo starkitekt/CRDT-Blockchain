@@ -14,7 +14,7 @@ import {
   CheckmarkFilled,
   Security
 } from '@carbon/icons-react';
-import CopyableValue from '@/components/CopyableValue';
+import OnChainTxLink from '@/components/Blockchain/OnChainTxLink';
 
 interface BlockchainCertificateProps {
   isOpen: boolean;
@@ -75,12 +75,9 @@ export default function BlockchainCertificate({
             <div className="text-right">
               <Tag type="green" className="!m-0">IMMU-VERIFIED</Tag>
               {txHash && (
-                <>
-                  <p className="text-[10px] mt-1 font-mono text-slate-500 break-all">Hash: {txHash}</p>
-                  <div className="mt-2 flex justify-end">
-                    <CopyableValue value={txHash} label="Copy Hash" className="min-h-0 h-7 px-2" />
-                  </div>
-                </>
+                <div className="mt-2 max-w-[320px] ml-auto">
+                  <OnChainTxLink txHash={txHash} label="Anchor tx" prefetchDetails />
+                </div>
               )}
             </div>
           </div>
