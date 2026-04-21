@@ -58,6 +58,10 @@ export interface IUser extends Document {
 
   // ── Blockchain Identity (auto-generated) ────────────────────────────────
   blockchainId?: string;
+
+  // ── Profile ──────────────────────────────────────────────────────────────
+  /** Base64 data URL of the user's profile photo (optional). */
+  profilePhoto?: string;
 }
 
 const UserSchema = new Schema<IUser>(
@@ -113,6 +117,9 @@ const UserSchema = new Schema<IUser>(
 
     // ── Blockchain Identity ─────────────────────────────────────────────────
     blockchainId: { type: String, trim: true, unique: true, sparse: true },
+
+    // ── Profile ──────────────────────────────────────────────────────────────
+    profilePhoto: { type: String },
   },
   { timestamps: true }
 );

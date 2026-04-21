@@ -12,6 +12,7 @@ export interface UserProfile {
   blockchainId?: string;
   kycCompleted: boolean;
   kycVerifiedAt?: string;
+  profilePhoto?: string | null;
 }
 
 const EMPTY: UserProfile = {
@@ -21,9 +22,14 @@ const EMPTY: UserProfile = {
   aadhaarMasked: null,
   aadhaarVerified: false,
   kycCompleted: false,
+  profilePhoto: null,
 };
 
-export function useUserProfile(): { profile: UserProfile; loading: boolean } {
+export function useUserProfile(): {
+  profile: UserProfile;
+  loading: boolean;
+  updateProfilePhoto: (dataUrl: string | null) => Promise<{ ok: boolean; error?: string }>;
+} {
   const [profile, setProfile] = useState<UserProfile>(EMPTY);
   const [loading, setLoading] = useState(true);
 
@@ -43,6 +49,7 @@ export function useUserProfile(): { profile: UserProfile; loading: boolean } {
           blockchainId:   body.blockchainId,
           kycCompleted:   body.kycCompleted   ?? false,
           kycVerifiedAt:  body.kycVerifiedAt,
+          profilePhoto:   body.profilePhoto   ?? null,
         } satisfies UserProfile;
       })
       .catch(() => EMPTY)
@@ -50,5 +57,23 @@ export function useUserProfile(): { profile: UserProfile; loading: boolean } {
     return () => { cancelled = true; };
   }, []);
 
-  return { profile, loading };
+  const updateProfilePhoto = async (dataUrl: string | null) => {
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profilePhoto: dataUrl }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        return { ok: false, error: (body as { error?: string }).error ?? 'Upload failed' };
+      }
+      setProfile((p) => ({ ...p, profilePhoto: dataUrl }));
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : 'Upload failed' };
+    }
+  };
+
+  return { profile, loading, updateProfilePhoto };
 }
