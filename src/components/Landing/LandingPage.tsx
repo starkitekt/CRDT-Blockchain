@@ -164,119 +164,16 @@ export default function LandingPage() {
     if (!selectedRole) { setError('Please select a role.'); return; }
     setLoading(true);
     try {
-      const profile = selectedRole === 'farmer'
-        ? {
-            kisanCard: farmerKisanCard || undefined,
-            aadhaarNumber: farmerIdType === 'aadhaar' ? farmerIdNumber : undefined,
-            panNumber: farmerIdType === 'pan' ? farmerIdNumber.toUpperCase() : undefined,
-            farmLocation: {
-              village: farmerVillage,
-              district: farmerDistrict,
-              state: farmerState,
-            },
-            honeyProductionCapacity: farmerCapacity ? Number(farmerCapacity) : undefined,
-            organicCertified: farmerOrganicCertified === 'yes',
-          }
-        : selectedRole === 'warehouse'
-          ? {
-              warehouseName,
-              registrationNumber: warehouseRegistrationNo,
-              aadhaarNumber: warehouseIdType === 'aadhaar' ? warehouseIdNumber : undefined,
-              panNumber: warehouseIdType === 'pan' ? warehouseIdNumber.toUpperCase() : undefined,
-              location: {
-                address: warehouseAddress,
-                city: warehouseCity,
-                state: warehouseState,
-                pincode: warehousePincode,
-              },
-              storageCapacity: warehouseStorageCapacity ? Number(warehouseStorageCapacity) : undefined,
-              currentUtilization: warehouseCurrentUtilization ? Number(warehouseCurrentUtilization) : undefined,
-              temperatureControlled: warehouseTemperatureControlled === 'yes',
-              humidityControl: warehouseHumidityControl === 'yes',
-            }
-        : selectedRole === 'lab'
-          ? {
-              labName,
-              fssaiLabNumber: labFssaiNumber,
-              aadhaarNumber: labIdType === 'aadhaar' ? labIdNumber : undefined,
-              panNumber: labIdType === 'pan' ? labIdNumber.toUpperCase() : undefined,
-              certifications: labCertifications
-                .split(',')
-                .map((item) => item.trim())
-                .filter(Boolean),
-              testingCapabilities: {
-                purityTest: labPurityTest === 'yes',
-                adulterationTest: labAdulterationTest === 'yes',
-                moistureTest: labMoistureTest === 'yes',
-              },
-              location: {
-                address: labAddress,
-                city: labCity,
-                state: labState,
-              },
-            }
-        : selectedRole === 'officer'
-          ? {
-              employeeId: officerEmployeeId,
-              department: officerDepartment,
-              aadhaarNumber: officerIdType === 'aadhaar' ? officerIdNumber : undefined,
-              panNumber: officerIdType === 'pan' ? officerIdNumber.toUpperCase() : undefined,
-              authorityLevel: officerAuthorityLevel,
-              labAffiliation: officerLabAffiliation || undefined,
-            }
-        : selectedRole === 'enterprise'
-          ? {
-              companyName: enterpriseCompanyName,
-              companyPan: enterpriseCompanyPan.toUpperCase(),
-              gstNumber: enterpriseGstNumber,
-              fssaiLicense: enterpriseFssaiLicense,
-              businessType: enterpriseBusinessType,
-              contactPerson: {
-                name: enterpriseContactName,
-                designation: enterpriseContactDesignation,
-              },
-              facilityLocation: {
-                address: enterpriseAddress,
-                city: enterpriseCity,
-                state: enterpriseState,
-              },
-              processingCapacity: enterpriseProcessingCapacity ? Number(enterpriseProcessingCapacity) : undefined,
-            }
-        : selectedRole === 'consumer'
-          ? {
-              aadhaarNumber: consumerAadhaarNumber,
-              preferences: {
-                organicOnly: consumerOrganicOnly === 'yes',
-                preferredRegions: consumerPreferredRegions
-                  .split(',')
-                  .map((item) => item.trim())
-                  .filter(Boolean),
-              },
-            }
-        : selectedRole === 'secretary'
-          ? {
-              employeeId: secretaryEmployeeId,
-              department: secretaryDepartment,
-              aadhaarNumber: secretaryIdType === 'aadhaar' ? secretaryIdNumber : undefined,
-              panNumber: secretaryIdType === 'pan' ? secretaryIdNumber.toUpperCase() : undefined,
-              jurisdiction: {
-                level: secretaryJurisdictionLevel,
-                region: secretaryJurisdictionRegion,
-              },
-              permissions: {
-                approveStakeholders: secretaryApproveStakeholders === 'yes',
-                auditAccess: secretaryAuditAccess === 'yes',
-                complianceControl: secretaryComplianceControl === 'yes',
-              },
-            }
-        : undefined;
-      await authApi.register({ name: signupName, email: signupEmail, password: signupPassword, role: selectedRole, profile });
-      setInfo('Account created. Sign in below.');
-      setEmail(signupEmail);
-      setPassword(signupPassword);
-      setAuthMode('login');
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Registration failed.');
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: signupName, email: signupEmail, password: signupPassword, role: selectedRole }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { setError(data.error ?? 'Registration failed.'); return; }
+      window.location.assign(`/${locale}/dashboard/${selectedRole}`);
+    } catch {
+      setError('Registration failed.');
     } finally { setLoading(false); }
   };
 
@@ -477,7 +374,10 @@ export default function LandingPage() {
                   <label htmlFor="lp-signup-pass">{tAuth('passwordLabel')}</label>
                   <input id="lp-signup-pass" type="password" placeholder="Min. 8 characters" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} required />
                 </div>
-                {selectedRole === 'farmer' && (
+                <p className="lp-info-note" style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.5rem' }}>
+                  Additional profile details will be collected after sign-up.
+                </p>
+                {false && selectedRole === 'farmer' && (
                   <>
                     <div className="lp-field">
                       <label htmlFor="lp-farmer-id-type">Identity Document</label>
@@ -534,7 +434,7 @@ export default function LandingPage() {
                     </div>
                   </>
                 )}
-                {selectedRole === 'warehouse' && (
+                {false && selectedRole === 'warehouse' && (
                   <>
                     <div className="lp-field">
                       <label htmlFor="lp-warehouse-name">Warehouse Name</label>
@@ -604,7 +504,7 @@ export default function LandingPage() {
                     </div>
                   </>
                 )}
-                {selectedRole === 'lab' && (
+                {false && selectedRole === 'lab' && (
                   <>
                     <div className="lp-field">
                       <label htmlFor="lp-lab-name">Lab Name</label>
@@ -673,7 +573,7 @@ export default function LandingPage() {
                     </div>
                   </>
                 )}
-                {selectedRole === 'officer' && (
+                {false && selectedRole === 'officer' && (
                   <>
                     <div className="lp-field">
                       <label htmlFor="lp-officer-employee-id">Employee ID</label>
@@ -720,7 +620,7 @@ export default function LandingPage() {
                     </div>
                   </>
                 )}
-                {selectedRole === 'enterprise' && (
+                {false && selectedRole === 'enterprise' && (
                   <>
                     <div className="lp-field">
                       <label htmlFor="lp-enterprise-company">Company Name</label>
@@ -775,7 +675,7 @@ export default function LandingPage() {
                     </div>
                   </>
                 )}
-                {selectedRole === 'consumer' && (
+                {false && selectedRole === 'consumer' && (
                   <>
                     <div className="lp-field">
                       <label htmlFor="lp-consumer-aadhaar">Aadhaar Number (Optional)</label>
@@ -794,7 +694,7 @@ export default function LandingPage() {
                     </div>
                   </>
                 )}
-                {selectedRole === 'secretary' && (
+                {false && selectedRole === 'secretary' && (
                   <>
                     <div className="lp-field">
                       <label htmlFor="lp-secretary-employee-id">Employee ID</label>

@@ -3,19 +3,21 @@
 import { useEffect, useState } from 'react';
 
 export interface CurrentUser {
-  userId:       string;
-  email:        string;
-  role:         string;
-  name:         string;
-  kycCompleted: boolean;
+  userId:              string;
+  email:               string;
+  role:                string;
+  name:                string;
+  kycCompleted:        boolean;
+  onboardingCompleted: boolean;
 }
 
 const EMPTY: CurrentUser = {
-  userId:       '',
-  email:        '',
-  role:         '',
-  name:         '',
-  kycCompleted: false,
+  userId:              '',
+  email:               '',
+  role:                '',
+  name:                '',
+  kycCompleted:        false,
+  onboardingCompleted: false,
 };
 
 export function useCurrentUser(): CurrentUser {
@@ -32,11 +34,12 @@ export function useCurrentUser(): CurrentUser {
         };
         const payload = body.user ?? {};
         return {
-          userId: payload.userId ?? '',
-          email: payload.email ?? '',
-          role: payload.role ?? '',
-          name: payload.name ?? payload.email ?? '',
-          kycCompleted: Boolean(payload.kycCompleted),
+          userId:              payload.userId ?? '',
+          email:               payload.email ?? '',
+          role:                payload.role ?? '',
+          name:                payload.name ?? payload.email ?? '',
+          kycCompleted:        Boolean(payload.kycCompleted),
+          onboardingCompleted: Boolean(payload.onboardingCompleted),
         };
       })
       .catch(() => EMPTY)

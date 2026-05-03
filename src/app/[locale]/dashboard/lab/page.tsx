@@ -27,7 +27,8 @@ import { useBatches } from '@/hooks/useBatches';
 import { useLabResults } from '@/hooks/useLabResults';
 import { labApi, ApiError } from '@/lib/api';
 import GuidedTour from '@/components/Onboarding/GuidedTour';
-import IdentityVerificationModal from '@/components/Onboarding/IdentityVerificationModal';
+import OnboardingModal from '@/components/Onboarding/OnboardingModal';
+import KYCPendingScreen from '@/components/Dashboard/KYCPendingScreen';
 import PriorStepQR from '@/components/Traceability/PriorStepQR';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
 import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
@@ -79,7 +80,10 @@ export default function LabDashboard() {
   const currentUser = useCurrentUser();
   const tOnboarding = useTranslations('Onboarding.lab');
   const tDashboard = useTranslations('Dashboard.lab');
-  const { isTourOpen, isKYCOpen, completeKYC, completeTour, closeTour } = useOnboarding({ role: 'lab', hasKYC: true });
+  const { isTourOpen, completeTour, closeTour } = useOnboarding({ role: 'lab', hasKYC: false });
+
+  const showOnboarding = currentUser.userId !== '' && !currentUser.onboardingCompleted;
+  const showKYCPending = currentUser.userId !== '' && currentUser.onboardingCompleted && !currentUser.kycCompleted;
 
   // ── Data ──────────────────────────────────────────────────────────────────
   const { batches: pendingBatches, loading: batchesLoading, refresh: refreshBatches } = useBatches();
@@ -200,9 +204,15 @@ export default function LabDashboard() {
     </div>
   );
 
+  if (showKYCPending) {
+    return <KYCPendingScreen role="lab" userName={currentUser.name} />;
+  }
+
   return (
     <UnifiedDashboardLayout header={pageHeader}>
-      <IdentityVerificationModal isOpen={isKYCOpen} role="lab" onCompleteAction={completeKYC} />
+      {showOnboarding && (
+        <OnboardingModal role="lab" userName={currentUser.name} onComplete={() => window.location.reload()} />
+      )}
       <GuidedTour steps={tourSteps} isOpen={isTourOpen} onClose={closeTour} onComplete={completeTour} />
 
       {/* Lab Stats */}

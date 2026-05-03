@@ -11,6 +11,8 @@ import {
   IbmCloudSecurityComplianceCenter as Security,
 } from '@carbon/icons-react';
 import GuidedTour from '@/components/Onboarding/GuidedTour';
+import OnboardingModal from '@/components/Onboarding/OnboardingModal';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 import PriorStepQR from '@/components/Traceability/PriorStepQR';
 import QRCodeGenerator from '@/components/Traceability/QRCodeGenerator';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
@@ -38,6 +40,8 @@ export default function ConsumerPortal() {
   const [labData, setLabData]                 = useState<LabResult | null>(null);
   const [traceTimeline, setTraceTimeline]     = useState<Array<Record<string, unknown>>>([]);
   const { isTourOpen, completeTour, closeTour } = useOnboarding({ role: 'consumer' });
+  const currentUser = useCurrentUser();
+  const showOnboarding = currentUser.userId !== '' && !currentUser.onboardingCompleted;
 
   const tourSteps = [
     { label: tOnboarding('step1_title'), title: tOnboarding('step1_title'), description: tOnboarding('step1_desc') },
@@ -156,6 +160,9 @@ export default function ConsumerPortal() {
 
   return (
     <UnifiedDashboardLayout header={pageHeader}>
+      {showOnboarding && (
+        <OnboardingModal role="consumer" userName={currentUser.name} onComplete={() => window.location.reload()} />
+      )}
       <GuidedTour
         steps={tourSteps}
         isOpen={isTourOpen}

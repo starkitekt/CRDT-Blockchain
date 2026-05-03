@@ -36,7 +36,8 @@ import { useBatches } from '@/hooks/useBatches';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { batchesApi, warehousesApi, ApiError, type WarehouseOption } from '@/lib/api';
 import GuidedTour from '@/components/Onboarding/GuidedTour';
-import SimplifiedFarmerOnboarding from '@/components/Onboarding/SimplifiedFarmerOnboarding';
+import OnboardingModal from '@/components/Onboarding/OnboardingModal';
+import KYCPendingScreen from '@/components/Dashboard/KYCPendingScreen';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
 import OnChainTxLink from '@/components/Blockchain/OnChainTxLink';
 import ProfileAvatar from '@/components/Profile/ProfileAvatar';
@@ -114,8 +115,13 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
   const t           = useTranslations('Dashboard.farmer');
   const tTour       = useTranslations('Onboarding.farmer');
 
-  const { isTourOpen, isKYCOpen: isOnboardingOpen, completeKYC: completeOnboarding, completeTour, closeTour } =
-    useOnboarding({ role: 'farmer', hasKYC: true });
+  const { isTourOpen, completeTour, closeTour } =
+    useOnboarding({ role: 'farmer', hasKYC: false });
+
+  const showOnboarding = currentUser.userId !== '' && !currentUser.onboardingCompleted;
+  const showKYCPending = currentUser.userId !== '' && currentUser.onboardingCompleted && !currentUser.kycCompleted;
+
+  const handleOnboardingComplete = () => { window.location.reload(); };
 
   /* ── Data ─────────────────────────────────────────────────────────── */
   const { batches, loading, error: fetchError, refresh } = useBatches({ farmerId: currentUser.userId });
@@ -419,10 +425,14 @@ export default function FarmerDashboard({ params }: { params: Promise<{ locale: 
   );
 
   /* ════════════════════════════════════════════════════════════════════ */
+  if (showKYCPending) {
+    return <KYCPendingScreen role="farmer" userName={currentUser.name} />;
+  }
+
   return (
     <UnifiedDashboardLayout header={pageHeader}>
-      {isOnboardingOpen && (
-        <SimplifiedFarmerOnboarding farmerName={currentUser.name} onCompleteAction={completeOnboarding} />
+      {showOnboarding && (
+        <OnboardingModal role="farmer" userName={currentUser.name} onComplete={handleOnboardingComplete} />
       )}
       <GuidedTour steps={tourSteps} isOpen={isTourOpen} onClose={closeTour} onComplete={completeTour} />
 

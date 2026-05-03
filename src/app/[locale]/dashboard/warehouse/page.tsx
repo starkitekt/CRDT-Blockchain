@@ -14,8 +14,10 @@ import {
 import { InventoryManagement, Temperature, Humidity, Delivery, Add, Connect, Location, Time, QrCode, Blockchain } from '@carbon/icons-react';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import GuidedTour from '@/components/Onboarding/GuidedTour';
-import IdentityVerificationModal from '@/components/Onboarding/IdentityVerificationModal';
+import OnboardingModal from '@/components/Onboarding/OnboardingModal';
+import KYCPendingScreen from '@/components/Dashboard/KYCPendingScreen';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useBatches } from '@/hooks/useBatches';
 import { batchesApi, ApiError } from '@/lib/api';
 import OnChainTxLink from '@/components/Blockchain/OnChainTxLink';
@@ -32,7 +34,11 @@ const getStatus = (s: string) => STATUS_META[s] ?? { label: s.replace(/_/g, ' ')
 export default function WarehouseDashboard() {
   const t          = useTranslations('Onboarding.warehouse');
   const tDashboard = useTranslations('Dashboard.warehouse');
-  const { isTourOpen, isKYCOpen, completeKYC, completeTour, closeTour } = useOnboarding({ role: 'warehouse', hasKYC: true });
+  const { isTourOpen, completeTour, closeTour } = useOnboarding({ role: 'warehouse', hasKYC: false });
+  const currentUser = useCurrentUser();
+
+  const showOnboarding = currentUser.userId !== '' && !currentUser.onboardingCompleted;
+  const showKYCPending = currentUser.userId !== '' && currentUser.onboardingCompleted && !currentUser.kycCompleted;
 
   const { batches, loading, error, refresh } = useBatches();
 
@@ -134,9 +140,15 @@ export default function WarehouseDashboard() {
     </div>
   );
 
+  if (showKYCPending) {
+    return <KYCPendingScreen role="warehouse" userName={currentUser.name} />;
+  }
+
   return (
     <UnifiedDashboardLayout header={pageHeader}>
-      <IdentityVerificationModal isOpen={isKYCOpen} role="warehouse" onCompleteAction={completeKYC} />
+      {showOnboarding && (
+        <OnboardingModal role="warehouse" userName={currentUser.name} onComplete={() => window.location.reload()} />
+      )}
       <GuidedTour steps={tourSteps} isOpen={isTourOpen} onClose={closeTour} onComplete={completeTour} />
 
       {/* Record Incoming Modal */}

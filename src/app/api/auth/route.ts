@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { LoginSchema } from '@/lib/validation/auth.schema';
 import { loginUser } from '@/lib/services/auth.service';
 import { checkRateLimit, resetRateLimit } from '@/lib/rateLimit';
-import { requireAuth, handleAuthError, AuthError } from '@/lib/rbac';
+import { handleAuthError, AuthError } from '@/lib/rbac';
+import { verifyToken } from '@/lib/auth';
+import { connectDB } from '@/lib/mongodb';
+import { User } from '@/lib/models/User';
 
 
 const COOKIE_MAX_AGE = 60 * 60 * 8; // 8 hours
@@ -10,8 +13,26 @@ const COOKIE_MAX_AGE = 60 * 60 * 8; // 8 hours
 
 export async function GET(req: NextRequest) {
   try {
-    const actor = await requireAuth(req);
-    return NextResponse.json({ user: actor });
+    const cookieToken = req.cookies.get('honeytrace_token')?.value;
+    const bearerToken = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+    const token = cookieToken ?? bearerToken;
+    if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+
+    const payload = verifyToken(token);
+    if (!payload) return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
+
+    // Always do a DB lookup so onboardingCompleted / kycCompleted are fresh
+    await connectDB();
+    const dbUser = await User.findById(payload.userId).select('onboardingCompleted kycCompleted name').lean();
+
+    return NextResponse.json({
+      user: {
+        ...payload,
+        name: (dbUser as any)?.name ?? payload.email,
+        onboardingCompleted: (dbUser as any)?.onboardingCompleted ?? false,
+        kycCompleted: (dbUser as any)?.kycCompleted ?? payload.kycCompleted,
+      },
+    });
   } catch (err) {
     if (err instanceof AuthError) return handleAuthError(err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -16,6 +16,8 @@ import {
 } from '@carbon/icons-react';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import GuidedTour          from '@/components/Onboarding/GuidedTour';
+import OnboardingModal      from '@/components/Onboarding/OnboardingModal';
+import { useCurrentUser }   from '@/hooks/useCurrentUser';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
 import ProductionHeatMap   from '@/components/Map/ProductionHeatMap';
 import type { ProductionCluster, UserRole } from '@/types';
@@ -278,6 +280,8 @@ export default function SecretaryDashboard() {
   const tOnboarding = useTranslations('Onboarding.secretary');
   const tDashboard  = useTranslations('Dashboard.secretary');
   const { isTourOpen, completeTour, closeTour } = useOnboarding({ role: 'secretary' });
+  const currentUser = useCurrentUser();
+  const showOnboarding = currentUser.userId !== '' && !currentUser.onboardingCompleted;
   const { batches, loading: batchesLoading } = useBatches();
   const { recalls } = useRecalls();
   const [pendingKycCount, setPendingKycCount] = useState<number>(0);
@@ -361,6 +365,9 @@ export default function SecretaryDashboard() {
 
   return (
     <UnifiedDashboardLayout header={pageHeader}>
+      {showOnboarding && (
+        <OnboardingModal role="secretary" userName={currentUser.name} onComplete={() => window.location.reload()} />
+      )}
       {secretaryToast && (
         <InlineNotification
           kind={secretaryToast.kind}

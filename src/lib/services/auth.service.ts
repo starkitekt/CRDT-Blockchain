@@ -28,7 +28,7 @@ export async function loginUser(
 
   // .select('+passwordHash') in case the field is excluded by default in schema
   const user = await User.findOne({ email: email.toLowerCase() }).select(
-    "+passwordHash",
+    '+passwordHash +onboardingCompleted',
   );
 
   // ── Timing-safe check ─────────────────────────────────────────────────────
@@ -43,10 +43,11 @@ export async function loginUser(
   if (user.role !== role) throw new Error("ROLE_MISMATCH");
 
   const token = signToken({
-    userId: String(user._id),
-    email: user.email,
-    role: user.role,
-    kycCompleted: user.kycCompleted ?? false, // ← add this
+    userId:              String(user._id),
+    email:               user.email,
+    role:                user.role,
+    kycCompleted:        user.kycCompleted ?? false,
+    onboardingCompleted: user.onboardingCompleted ?? false,
   });
 
   // ── Fire-and-forget audit log ─────────────────────────────────────────────
