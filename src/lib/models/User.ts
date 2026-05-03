@@ -56,6 +56,9 @@ export interface IUser extends Document {
   // ── Consumer ──────────────────────────────────────────────────────────────
   mobileNumber?: string;
 
+  // ── Onboarding ───────────────────────────────────────────────────────────
+  onboardingCompleted: boolean;
+
   // ── Blockchain Identity (auto-generated) ────────────────────────────────
   blockchainId?: string;
 
@@ -114,6 +117,9 @@ const UserSchema = new Schema<IUser>(
 
     // ── Consumer ──────────────────────────────────────────────────────────────
     mobileNumber: { type: String, trim: true },
+
+    // ── Onboarding ───────────────────────────────────────────────────────────
+    onboardingCompleted: { type: Boolean, default: false },
 
     // ── Blockchain Identity ─────────────────────────────────────────────────
     blockchainId: { type: String, trim: true, unique: true, sparse: true },

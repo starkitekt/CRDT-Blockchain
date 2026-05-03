@@ -12,7 +12,8 @@ export interface JWTPayload {
   userId: string;
   email: string;
   role: string;
-  kycCompleted: boolean; // ← add this
+  kycCompleted: boolean;
+  onboardingCompleted: boolean;
   iat?: number;
   exp?: number;
 }

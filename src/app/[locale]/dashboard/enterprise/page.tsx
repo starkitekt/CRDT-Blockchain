@@ -15,7 +15,7 @@ import {
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useBatches } from '@/hooks/useBatches';
 import BlockchainCertificate from '@/components/Traceability/BlockchainCertificate';
-import IdentityVerificationModal from '@/components/Onboarding/IdentityVerificationModal';
+import OnboardingModal from '@/components/Onboarding/OnboardingModal';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
 import OnChainTxLink from '@/components/Blockchain/OnChainTxLink';
 import type { Batch } from '@/types';
@@ -46,7 +46,6 @@ export default function EnterpriseDashboard() {
   const { batches, loading, error, refresh } = useBatches({ status: 'dispatched' });
 
   const [certBatch, setCertBatch] = useState<Batch | null>(null);
-  const [kycOpen, setKycOpen] = useState(false);
   const [detailBatch, setDetailBatch] = useState<Batch | null>(null);
 
   const totalKg = batches.reduce((s, b) => s + (b.weightKg ?? 0), 0);
@@ -67,7 +66,6 @@ export default function EnterpriseDashboard() {
   const headerActions = (
     <div className="flex gap-spacing-sm">
       <Button kind="ghost" size="md" renderIcon={Renew} iconDescription="Refresh" onClick={refresh}>Refresh</Button>
-      <Button kind="secondary" size="md" onClick={() => setKycOpen(true)}>KYC Documents</Button>
     </div>
   );
 
@@ -258,11 +256,9 @@ export default function EnterpriseDashboard() {
         txHash={certBatch?.onChainTxHash}
       />
 
-      <IdentityVerificationModal
-        isOpen={kycOpen}
-        onCompleteAction={() => setKycOpen(false)}
-        role="enterprise"
-      />
+      {!user.onboardingCompleted && user.userId !== '' && (
+        <OnboardingModal role="enterprise" userName={user.name} onComplete={() => window.location.reload()} />
+      )}
     </UnifiedDashboardLayout>
   );
 }

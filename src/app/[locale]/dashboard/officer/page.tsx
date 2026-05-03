@@ -26,7 +26,8 @@ import { useOnboarding } from '@/hooks/useOnboarding';
 import { useBatches } from '@/hooks/useBatches';
 import { batchesApi, labApi, ApiError } from '@/lib/api';
 import GuidedTour from '@/components/Onboarding/GuidedTour';
-import IdentityVerificationModal from '@/components/Onboarding/IdentityVerificationModal';
+import OnboardingModal from '@/components/Onboarding/OnboardingModal';
+import KYCPendingScreen from '@/components/Dashboard/KYCPendingScreen';
 import PriorStepQR from '@/components/Traceability/PriorStepQR';
 import UnifiedDashboardLayout from '@/components/Navigation/UnifiedDashboardLayout';
 import BlockchainMapStamp from '@/components/Traceability/BlockchainMapStamp';
@@ -38,7 +39,10 @@ export default function OfficerDashboard() {
   const currentUser = useCurrentUser();
   const tOnboarding = useTranslations('Onboarding.officer');
   const tDashboard = useTranslations('Dashboard.officer');
-  const { isTourOpen, isKYCOpen, completeKYC, completeTour, closeTour } = useOnboarding({ role: 'officer', hasKYC: true });
+  const { isTourOpen, completeTour, closeTour } = useOnboarding({ role: 'officer', hasKYC: false });
+
+  const showOnboarding = currentUser.userId !== '' && !currentUser.onboardingCompleted;
+  const showKYCPending = currentUser.userId !== '' && currentUser.onboardingCompleted && !currentUser.kycCompleted;
   const [signTimestamp, setSignTimestamp] = useState('');
   const [isRecallOpen, setIsRecallOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'approve' | 'flag' | null>(null);
@@ -146,14 +150,16 @@ export default function OfficerDashboard() {
     </div>
   );
 
+  if (showKYCPending) {
+    return <KYCPendingScreen role="officer" userName={currentUser.name} />;
+  }
+
   return (
     <UnifiedDashboardLayout header={pageHeader}>
+      {showOnboarding && (
+        <OnboardingModal role="officer" userName={currentUser.name} onComplete={() => window.location.reload()} />
+      )}
       <RecallManagementModal isOpen={isRecallOpen} onClose={() => setIsRecallOpen(false)} batchId={actionBatch} />
-      <IdentityVerificationModal 
-        isOpen={isKYCOpen}
-        role="officer"
-        onCompleteAction={completeKYC}
-      />
       <GuidedTour
         steps={tourSteps}
         isOpen={isTourOpen}
