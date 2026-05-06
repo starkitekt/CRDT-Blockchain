@@ -1,7 +1,7 @@
-// src/middleware.ts
+// src/proxy.ts
 import createMiddleware from 'next-intl/middleware';
 import { NextRequest, NextResponse } from 'next/server';
-import { jwtVerify } from 'jose'; // ← edge-compatible, no jsonwebtoken
+import { jwtVerify } from 'jose/dist/node/index.js';
 import { routing } from './i18n/routing';
 
 
@@ -33,8 +33,6 @@ function withCors(req: NextRequest, res: NextResponse): NextResponse {
 
 
 // ── RBAC ──────────────────────────────────────────────────────────────────────
-// `/dashboard/marketplace` is shared across all operational roles; each role still
-// only sees views and actions appropriate to itself, enforced at the API layer.
 const ROLE_PATHS: Record<string, string[]> = {
   farmer:     ['/dashboard/farmer', '/dashboard/marketplace'],
   warehouse:  ['/dashboard/warehouse', '/dashboard/marketplace'],
@@ -94,15 +92,12 @@ export default async function middleware(request: NextRequest) {
     const token = request.cookies.get('honeytrace_token')?.value;
     const roleCookie = request.cookies.get('honeytrace_role')?.value;
 
-    // ── Both cookies must exist ───────────────────────────────────────────────
     if (!token || !roleCookie) {
       return NextResponse.redirect(new URL('/', request.url));
     }
 
-    // ── JWT must be valid and role must match the cookie ──────────────────────
     const payload = await verifyJwt(token);
     if (!payload || payload.role !== roleCookie) {
-      // Token invalid or role cookie tampered — clear both and redirect
       const redirectRes = NextResponse.redirect(new URL('/', request.url));
       redirectRes.cookies.delete('honeytrace_token');
       redirectRes.cookies.delete('honeytrace_role');
@@ -130,6 +125,6 @@ export const config = {
     '/api/:path*',
     '/',
     '/(hi|en)/:path*',
-    '/dashboard/:path*',   // ← was missing: bare /dashboard paths now guarded
+    '/dashboard/:path*',
   ],
 };
