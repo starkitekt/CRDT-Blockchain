@@ -76,7 +76,7 @@ const nextConfig: NextConfig = {
   ...(process.env.VERCEL ? {} : { output: "standalone" }),
 
   // Prevents Next.js from bundling mongoose (causes build failures)
-  serverExternalPackages: ["mongoose"],
+  serverExternalPackages: ["mongoose", "ethers"],
 
   async headers() {
     return [
